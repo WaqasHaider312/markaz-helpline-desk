@@ -422,39 +422,48 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
       </div>
 
       {/* Bottom Section */}
-      <div className="sticky bottom-0 border-t border-gray-200 bg-white">
-        {/* Tabs */}
-        <div className="flex px-4 pt-2 gap-4 border-b">
-          <button
-            onClick={() => setActiveTab('reply')}
-            className={`pb-2 text-sm font-medium transition-colors ${
-              activeTab === 'reply'
-                ? 'border-b-2 border-primary text-primary'
-                : 'text-gray-600 hover:text-primary'
-            }`}
-          >
-            Reply
-          </button>
-          <button
-            onClick={() => setActiveTab('note')}
-            className={`pb-2 text-sm font-medium transition-colors ${
-              activeTab === 'note'
-                ? 'border-b-2 border-yellow-500 text-yellow-600'
-                : 'text-gray-600 hover:text-yellow-600'
-            }`}
-          >
-            Internal Note
-          </button>
-        </div>
+<div className="sticky bottom-0 border-t border-gray-200 bg-white">
+  {/* Tabs */}
+  <div className="flex px-4 pt-2 gap-4 border-b">
+    <button
+      onClick={() => setActiveTab('reply')}
+      className={`pb-2 text-sm font-medium transition-colors ${
+        activeTab === 'reply'
+          ? 'border-b-2 border-primary text-primary'
+          : 'text-gray-600 hover:text-primary'
+      }`}
+    >
+      Reply
+    </button>
+    <button
+      onClick={() => setActiveTab('note')}
+      className={`pb-2 text-sm font-medium transition-colors ${
+        activeTab === 'note'
+          ? 'border-b-2 border-yellow-500 text-yellow-600'
+          : 'text-gray-600 hover:text-yellow-600'
+      }`}
+    >
+      Internal Note
+    </button>
+  </div>
 
-        {/* Content */}
-        <div className="p-4 relative">
+  {/* Content */}
+  <div className="p-4 relative">
+    {/* File Input (hidden) */}
+    <input
+      ref={fileInputRef}
+      type="file"
+      accept="image/jpeg,image/jpg,image/png,video/mp4,application/pdf"
+      onChange={handleFileSelect}
+      className="hidden"
+    />
+
           {activeTab === 'reply' ? (
             <>
               {/* Attachment Preview */}
               {attachment && (
-                <div className="mb-2 flex items-center gap-2 bg-gray-100 p-2 rounded">
-                  <Paperclip className="w-4 h-4" />
+                <div className="mb-2 flex items-center gap-2 bg-gray-100 p-2 rounded-lg">
+                  <Paperclip className="w-4 h-4 text-gray-600" />
                   <span className="text-sm flex-1 truncate">{attachment.name}</span>
                   <span className="text-xs text-gray-500">
                     {(attachment.size / 1024).toFixed(1)}KB
@@ -485,25 +494,17 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
                 </div>
               )}
 
-              <div className="flex gap-2">
-                {/* File Input */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/jpg,image/png,video/mp4,application/pdf"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
-
+              {/* Input Row */}
+              <div className="flex items-center gap-2">
                 {/* Attachment Button */}
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="icon"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={sending || isUploading}
-                  className="shrink-0 h-[88px] w-12"
+                  className="shrink-0 h-10 w-10 hover:bg-gray-100 rounded-full"
                 >
-                  <Paperclip className="w-4 h-4" />
+                  <Paperclip className="w-5 h-5 text-gray-600" />
                 </Button>
 
                 {/* Text Area */}
@@ -511,8 +512,8 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
                   placeholder="Type your message or use / for canned responses..."
                   value={replyText}
                   onChange={handleReplyTextChange}
-                  rows={3}
-                  className="flex-1 resize-none"
+                  rows={1}
+                  className="flex-1 resize-none min-h-[40px] max-h-[120px] rounded-lg border-gray-300"
                   maxLength={500}
                 />
 
@@ -520,7 +521,7 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
                 <Button
                   onClick={handleSendReply}
                   disabled={(!replyText.trim() && !attachment) || sending || isUploading}
-                  className="shrink-0"
+                  className="shrink-0 h-10 px-6 rounded-lg"
                 >
                   {sending || isUploading ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -530,74 +531,74 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
                 </Button>
               </div>
 
-              <div className="flex justify-between items-center mt-2 text-xs text-gray-500">
+              {/* Info Row */}
+              <div className="flex justify-between items-center mt-2 text-xs text-gray-400">
                 <span>{replyText.length}/500</span>
-                <span className="text-gray-400">Use / to show quick replies</span>
+                <span>Use / to show quick replies</span>
               </div>
             </>
           ) : (
             <>
-                {/* Attachment Preview for Notes */}
-                {attachment && (
-                  <div className="mb-2 flex items-center gap-2 bg-yellow-100 p-2 rounded">
-                    <Paperclip className="w-4 h-4" />
-                    <span className="text-sm flex-1 truncate">{attachment.name}</span>
-                    <span className="text-xs text-gray-500">
-                      {(attachment.size / 1024).toFixed(1)}KB
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={removeAttachment}
-                      className="h-6 w-6"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                )}
-
-                <div className="flex gap-2">
-                  {/* Attachment Button */}
+              {/* Attachment Preview for Notes */}
+              {attachment && (
+                <div className="mb-2 flex items-center gap-2 bg-yellow-100 p-2 rounded-lg">
+                  <Paperclip className="w-4 h-4 text-yellow-700" />
+                  <span className="text-sm flex-1 truncate">{attachment.name}</span>
+                  <span className="text-xs text-yellow-600">
+                    {(attachment.size / 1024).toFixed(1)}KB
+                  </span>
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="icon"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={sending || isUploading}
-                    className="shrink-0 h-[88px] w-12"
+                    onClick={removeAttachment}
+                    className="h-6 w-6"
                   >
-                    <Paperclip className="w-5 h-5" />
-                  </Button>
-
-                  {/* Textarea */}
-                  <Textarea
-                    placeholder="Add an internal note (only visible to agents)..."
-                    value={noteText}
-                    onChange={(e) => setNoteText(e.target.value)}
-                    rows={3}
-                    className="flex-1 bg-yellow-50 border-yellow-300 resize-none"
-                    maxLength={500}
-                  />
-
-                  {/* Add Note Button */}
-                  <Button
-                    onClick={handleAddNote}
-                    disabled={(!noteText.trim() && !attachment) || sending || isUploading}
-                    className="shrink-0 bg-yellow-500 hover:bg-yellow-600"
-                  >
-                    {sending || isUploading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      'Add'
-                    )}
+                    <X className="w-4 h-4" />
                   </Button>
                 </div>
+              )}
 
-                <div className="flex justify-between items-center mt-2 text-xs text-gray-500">
-                  <span>🔒 Only visible to agents</span>
-                  <span>{noteText.length}/500</span>
-                </div>
-              <div className="text-xs text-gray-500 mt-2">
-                {noteText.length}/500
+              {/* Input Row */}
+              <div className="flex items-center gap-2">
+                {/* Attachment Button */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={sending || isUploading}
+                  className="shrink-0 h-10 w-10 hover:bg-yellow-100 rounded-full"
+                >
+                  <Paperclip className="w-5 h-5 text-gray-600" />
+                </Button>
+
+                {/* Textarea */}
+                <Textarea
+                  placeholder="Add an internal note (only visible to agents)..."
+                  value={noteText}
+                  onChange={(e) => setNoteText(e.target.value)}
+                  rows={1}
+                  className="flex-1 resize-none min-h-[40px] max-h-[120px] rounded-lg bg-yellow-50 border-yellow-300"
+                  maxLength={500}
+                />
+
+                {/* Add Note Button */}
+                <Button
+                  onClick={handleAddNote}
+                  disabled={(!noteText.trim() && !attachment) || sending || isUploading}
+                  className="shrink-0 h-10 px-6 rounded-lg bg-yellow-500 hover:bg-yellow-600"
+                >
+                  {sending || isUploading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    'Add'
+                  )}
+                </Button>
+              </div>
+
+              {/* Info Row */}
+              <div className="flex justify-between items-center mt-2 text-xs text-gray-400">
+                <span>🔒 Only visible to agents</span>
+                <span>{noteText.length}/500</span>
               </div>
             </>
           )}
