@@ -166,13 +166,13 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
       const fileName = `${ticketId}/${Math.random().toString(36).substring(7)}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('ticket_attachments')
+        .from('ticket-attachments')
         .upload(fileName, file);
 
       if (uploadError) throw uploadError;
 
       const { data } = supabase.storage
-        .from('ticket_attachments')
+        .from('ticket-attachments')
         .getPublicUrl(fileName);
 
       return data.publicUrl;
