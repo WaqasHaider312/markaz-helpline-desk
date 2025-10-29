@@ -17,10 +17,11 @@ export interface Ticket {
   description: string;
   status: 'Pending' | 'In Progress' | 'Resolved';
   partner_name?: string;
-  attachment_urls?: string[];
   assigned_agent_id?: string;
+  attachment_urls?: string[];
   created_at: string;
   updated_at: string;
+  agent_profiles?: any;
 }
 
 export interface Message {
