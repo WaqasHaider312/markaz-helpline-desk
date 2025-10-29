@@ -30,7 +30,7 @@ const Tickets = () => {
       />
 
       {/* Right Panel - Info */}
-      {selectedTicketId && <InfoPanel ticketId={selectedTicketId} />}
+      <InfoPanel ticketId={selectedTicketId || 'test'} />
     </div>
   );
 };
