@@ -24,8 +24,6 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
 
   useEffect(() => {
     fetchTickets();
-    const interval = setInterval(fetchTickets, 30000);
-    return () => clearInterval(interval);
   }, [currentView, profile, topicFilter, statusFilter, searchQuery]);
 
   const fetchTickets = async () => {
@@ -91,7 +89,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
   };
 
   return (
-    <div className="w-[400px] bg-white border-r border-gray-200 flex flex-col h-full">
+    <div className="w-[320px] bg-white border-r border-gray-200 flex flex-col h-full">
       {/* Header */}
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center justify-between mb-3">

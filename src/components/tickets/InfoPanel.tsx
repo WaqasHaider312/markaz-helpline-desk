@@ -174,6 +174,33 @@ const InfoPanel = ({ ticketId }: InfoPanelProps) => {
           </Select>
         </div>
       </div>
+{/* Quick Actions */}
+      <div className="p-4">
+        <h4 className="text-xs font-medium text-gray-600 mb-3">Quick Actions</h4>
+        <div className="space-y-2">
+          <Button
+            variant="outline"
+            className="w-full justify-start text-sm"
+            onClick={() => {
+              const url = `${window.location.origin}/tickets`;
+              copyToClipboard(url);
+            }}
+          >
+            <Copy className="h-4 w-4 mr-2" />
+            Copy Link
+          </Button>
+          
+          {ticket.status !== 'Resolved' && (
+            <Button
+              className="w-full justify-start text-sm bg-green-600 hover:bg-green-700 text-white"
+              onClick={() => handleStatusChange('Resolved')}
+              disabled={updating}
+            >
+              ✓ Mark Resolved
+            </Button>
+          )}
+        </div>
+      </div>
 
       {/* Contact */}
       <div className="p-4 border-b border-gray-200">
@@ -217,34 +244,6 @@ const InfoPanel = ({ ticketId }: InfoPanelProps) => {
               {format(new Date(ticket.created_at), 'MMM dd, yyyy HH:mm')}
             </p>
           </div>
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="p-4">
-        <h4 className="text-xs font-medium text-gray-600 mb-3">Quick Actions</h4>
-        <div className="space-y-2">
-          <Button
-            variant="outline"
-            className="w-full justify-start text-sm"
-            onClick={() => {
-              const url = `${window.location.origin}/tickets`;
-              copyToClipboard(url);
-            }}
-          >
-            <Copy className="h-4 w-4 mr-2" />
-            Copy Link
-          </Button>
-          
-          {ticket.status !== 'Resolved' && (
-            <Button
-              className="w-full justify-start text-sm bg-green-600 hover:bg-green-700 text-white"
-              onClick={() => handleStatusChange('Resolved')}
-              disabled={updating}
-            >
-              ✓ Mark Resolved
-            </Button>
-          )}
         </div>
       </div>
     </div>

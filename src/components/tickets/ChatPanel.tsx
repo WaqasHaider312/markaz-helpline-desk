@@ -501,7 +501,7 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
                   size="icon"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={sending || isUploading}
-                  className="shrink-0"
+                  className="shrink-0 h-[88px] w-12"
                 >
                   <Paperclip className="w-4 h-4" />
                 </Button>
@@ -537,26 +537,65 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
             </>
           ) : (
             <>
-              <Textarea
-                placeholder="Add an internal note (only visible to agents)..."
-                value={noteText}
-                onChange={(e) => setNoteText(e.target.value)}
-                rows={3}
-                className="mb-2 bg-yellow-50 border-yellow-300 resize-none"
-                maxLength={500}
-              />
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                  🔒 This note is only visible to your team
-                </span>
-                <Button
-                  onClick={handleAddNote}
-                  disabled={!noteText.trim() || sending}
-                  className="bg-yellow-500 hover:bg-yellow-600"
-                >
-                  {sending ? 'Adding...' : 'Add Note'}
-                </Button>
-              </div>
+                {/* Attachment Preview for Notes */}
+                {attachment && (
+                  <div className="mb-2 flex items-center gap-2 bg-yellow-100 p-2 rounded">
+                    <Paperclip className="w-4 h-4" />
+                    <span className="text-sm flex-1 truncate">{attachment.name}</span>
+                    <span className="text-xs text-gray-500">
+                      {(attachment.size / 1024).toFixed(1)}KB
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={removeAttachment}
+                      className="h-6 w-6"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  {/* Attachment Button */}
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={sending || isUploading}
+                    className="shrink-0 h-[88px] w-12"
+                  >
+                    <Paperclip className="w-5 h-5" />
+                  </Button>
+
+                  {/* Textarea */}
+                  <Textarea
+                    placeholder="Add an internal note (only visible to agents)..."
+                    value={noteText}
+                    onChange={(e) => setNoteText(e.target.value)}
+                    rows={3}
+                    className="flex-1 bg-yellow-50 border-yellow-300 resize-none"
+                    maxLength={500}
+                  />
+
+                  {/* Add Note Button */}
+                  <Button
+                    onClick={handleAddNote}
+                    disabled={(!noteText.trim() && !attachment) || sending || isUploading}
+                    className="shrink-0 bg-yellow-500 hover:bg-yellow-600"
+                  >
+                    {sending || isUploading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      'Add'
+                    )}
+                  </Button>
+                </div>
+
+                <div className="flex justify-between items-center mt-2 text-xs text-gray-500">
+                  <span>🔒 Only visible to agents</span>
+                  <span>{noteText.length}/500</span>
+                </div>
               <div className="text-xs text-gray-500 mt-2">
                 {noteText.length}/500
               </div>
