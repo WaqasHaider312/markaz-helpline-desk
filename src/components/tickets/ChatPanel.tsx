@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, Ticket, Message, InternalNote } from '@/lib/supabase';
-import { MessageCircle, ChevronRight } from 'lucide-react';
+import { MessageCircle, ChevronRight, Paperclip, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { formatDistanceToNow } from 'date-fns';
@@ -10,6 +10,11 @@ import { toast } from 'sonner';
 interface ChatPanelProps {
   ticketId: string | null;
   onToggleInfo: () => void;
+}
+
+interface CannedMessage {
+  id: string;
+  message_text: string;
 }
 
 const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
@@ -21,11 +26,18 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
   const [replyText, setReplyText] = useState('');
   const [noteText, setNoteText] = useState('');
   const [sending, setSending] = useState(false);
+  const [attachment, setAttachment] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [showCannedMessages, setShowCannedMessages] = useState(false);
+  const [cannedMessages, setCannedMessages] = useState<CannedMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (ticketId) {
       fetchTicketData();
+      fetchCannedMessages();
+      subscribeToUpdates();
     }
   }, [ticketId]);
 
@@ -63,20 +75,136 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
     }
   };
 
+  const fetchCannedMessages = async () => {
+    if (!profile) return;
+
+    try {
+      const { data } = await supabase
+        .from('canned_messages')
+        .select('*')
+        .eq('agent_id', profile.id)
+        .order('created_at', { ascending: false });
+
+      setCannedMessages(data || []);
+    } catch (error) {
+      console.error('Error fetching canned messages:', error);
+    }
+  };
+
+  const subscribeToUpdates = () => {
+    const messagesChannel = supabase
+      .channel('ticket-messages')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `ticket_id=eq.${ticketId}`,
+        },
+        (payload) => {
+          setMessages((prev) => [...prev, payload.new as Message]);
+        }
+      )
+      .subscribe();
+
+    const notesChannel = supabase
+      .channel('ticket-notes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'internal_notes',
+          filter: `ticket_id=eq.${ticketId}`,
+        },
+        (payload) => {
+          setInternalNotes((prev) => [...prev, payload.new as InternalNote]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(messagesChannel);
+      supabase.removeChannel(notesChannel);
+    };
+  };
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File too large. Max 5MB.');
+      return;
+    }
+
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'video/mp4', 'application/pdf'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Invalid file type');
+      return;
+    }
+
+    setAttachment(file);
+  };
+
+  const removeAttachment = () => {
+    setAttachment(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const uploadAttachment = async (file: File): Promise<string | null> => {
+    try {
+      setIsUploading(true);
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${ticketId}/${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('ticket_attachments')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from('ticket_attachments')
+        .getPublicUrl(fileName);
+
+      return data.publicUrl;
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      toast.error('Upload failed');
+      return null;
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleSendReply = async () => {
-    if (!replyText.trim() || !ticketId || !profile) return;
+    if ((!replyText.trim() && !attachment) || !ticketId || !profile) return;
 
     setSending(true);
     try {
+      let attachmentUrl = null;
+      if (attachment) {
+        attachmentUrl = await uploadAttachment(attachment);
+        if (!attachmentUrl) {
+          setSending(false);
+          return;
+        }
+      }
+
       const { error } = await supabase.from('messages').insert({
         ticket_id: ticketId,
         sender_type: 'agent',
         sender_name: profile.full_name,
-        message: replyText.trim(),
+        message: replyText.trim() || 'Attachment',
+        attachment_url: attachmentUrl,
       });
 
       if (error) throw error;
@@ -87,11 +215,16 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
           .from('tickets')
           .update({ status: 'In Progress' })
           .eq('id', ticketId);
+        
+        setTicket(prev => prev ? {...prev, status: 'In Progress'} : null);
       }
 
       setReplyText('');
+      setAttachment(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       toast.success('Message sent');
-      fetchTicketData();
     } catch (error) {
       console.error('Error sending message:', error);
       toast.error('Failed to send message');
@@ -116,12 +249,28 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
 
       setNoteText('');
       toast.success('Note added');
-      fetchTicketData();
     } catch (error) {
       console.error('Error adding note:', error);
       toast.error('Failed to add note');
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleCannedMessageSelect = (messageText: string) => {
+    setReplyText(messageText);
+    setShowCannedMessages(false);
+  };
+
+  const handleReplyTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setReplyText(value);
+
+    // Show canned messages if user types "/"
+    if (value.endsWith('/')) {
+      setShowCannedMessages(true);
+    } else if (!value.includes('/')) {
+      setShowCannedMessages(false);
     }
   };
 
@@ -144,7 +293,7 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-white">
+    <div className="flex-1 flex flex-col bg-white relative">
       {/* Top Bar */}
       <div className="sticky top-0 p-4 border-b border-gray-200 bg-white z-10">
         <div className="flex items-center justify-between">
@@ -175,7 +324,25 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
               <div>
                 <span className="font-medium">Issue Type:</span> {ticket.issue_type}
               </div>
-              <div className="mt-2 text-gray-700">{ticket.description}</div>
+              {ticket.description && (
+                <div className="mt-2 text-gray-700 whitespace-pre-wrap">{ticket.description}</div>
+              )}
+              {ticket.attachment_urls && ticket.attachment_urls.length > 0 && (
+                <div className="mt-2">
+                  <span className="font-medium text-xs">Attachments:</span>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    {ticket.attachment_urls.map((url: string, idx: number) => (
+                      <img
+                        key={idx}
+                        src={url}
+                        alt="Attachment"
+                        className="rounded-lg max-h-40 object-cover cursor-pointer hover:opacity-80"
+                        onClick={() => window.open(url, '_blank')}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="text-xs text-gray-500 mt-2 text-right">
                 {formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true })}
               </div>
@@ -194,6 +361,14 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
                 <div className="bg-gray-100 rounded-2xl rounded-tl-sm p-3">
                   <p className="text-xs text-gray-600 mb-1">{message.sender_name}</p>
                   <p className="text-sm text-gray-900 whitespace-pre-wrap">{message.message}</p>
+                  {message.attachment_url && (
+                    <img
+                      src={message.attachment_url}
+                      alt="Attachment"
+                      className="mt-2 rounded-lg max-h-60 cursor-pointer hover:opacity-80"
+                      onClick={() => window.open(message.attachment_url, '_blank')}
+                    />
+                  )}
                   <p className="text-xs text-gray-500 mt-1">
                     {formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}
                   </p>
@@ -206,6 +381,14 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
                 <div className="bg-primary rounded-2xl rounded-tr-sm p-3">
                   <p className="text-xs text-blue-100 mb-1">{message.sender_name}</p>
                   <p className="text-sm text-white whitespace-pre-wrap">{message.message}</p>
+                  {message.attachment_url && (
+                    <img
+                      src={message.attachment_url}
+                      alt="Attachment"
+                      className="mt-2 rounded-lg max-h-60 cursor-pointer hover:opacity-80"
+                      onClick={() => window.open(message.attachment_url, '_blank')}
+                    />
+                  )}
                   <p className="text-xs text-blue-100 mt-1">
                     {formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}
                   </p>
@@ -220,7 +403,7 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
 
         {/* Internal Notes */}
         {internalNotes.map((note) => (
-          <div key={note.id} className="internal-note">
+          <div key={note.id} className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-lg">🔒</span>
               <span className="bg-yellow-200 text-yellow-800 text-xs px-2 py-1 rounded">
@@ -265,26 +448,91 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
         </div>
 
         {/* Content */}
-        <div className="p-4">
+        <div className="p-4 relative">
           {activeTab === 'reply' ? (
             <>
-              <Textarea
-                placeholder="Type your message..."
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                rows={3}
-                className="mb-2 resize-none"
-              />
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-muted-foreground">
-                  {replyText.length}/500
-                </span>
+              {/* Attachment Preview */}
+              {attachment && (
+                <div className="mb-2 flex items-center gap-2 bg-gray-100 p-2 rounded">
+                  <Paperclip className="w-4 h-4" />
+                  <span className="text-sm flex-1 truncate">{attachment.name}</span>
+                  <span className="text-xs text-gray-500">
+                    {(attachment.size / 1024).toFixed(1)}KB
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={removeAttachment}
+                    className="h-6 w-6"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
+
+              {/* Canned Messages Dropdown */}
+              {showCannedMessages && cannedMessages.length > 0 && (
+                <div className="absolute bottom-full left-4 right-4 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto z-20">
+                  {cannedMessages.map((msg) => (
+                    <button
+                      key={msg.id}
+                      onClick={() => handleCannedMessageSelect(msg.message_text)}
+                      className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm border-b last:border-b-0"
+                    >
+                      {msg.message_text.slice(0, 60)}...
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                {/* File Input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,video/mp4,application/pdf"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+
+                {/* Attachment Button */}
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={sending || isUploading}
+                  className="shrink-0"
+                >
+                  <Paperclip className="w-4 h-4" />
+                </Button>
+
+                {/* Text Area */}
+                <Textarea
+                  placeholder="Type your message or use / for canned responses..."
+                  value={replyText}
+                  onChange={handleReplyTextChange}
+                  rows={3}
+                  className="flex-1 resize-none"
+                  maxLength={500}
+                />
+
+                {/* Send Button */}
                 <Button
                   onClick={handleSendReply}
-                  disabled={!replyText.trim() || sending}
+                  disabled={(!replyText.trim() && !attachment) || sending || isUploading}
+                  className="shrink-0"
                 >
-                  {sending ? 'Sending...' : 'Send'}
+                  {sending || isUploading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    'Send'
+                  )}
                 </Button>
+              </div>
+
+              <div className="flex justify-between items-center mt-2 text-xs text-gray-500">
+                <span>{replyText.length}/500</span>
+                <span className="text-gray-400">Use / to show quick replies</span>
               </div>
             </>
           ) : (
@@ -295,6 +543,7 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
                 onChange={(e) => setNoteText(e.target.value)}
                 rows={3}
                 className="mb-2 bg-yellow-50 border-yellow-300 resize-none"
+                maxLength={500}
               />
               <div className="flex justify-between items-center">
                 <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -307,6 +556,9 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
                 >
                   {sending ? 'Adding...' : 'Add Note'}
                 </Button>
+              </div>
+              <div className="text-xs text-gray-500 mt-2">
+                {noteText.length}/500
               </div>
             </>
           )}
