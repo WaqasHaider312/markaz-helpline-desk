@@ -325,7 +325,9 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
                 <span className="font-medium">Issue Type:</span> {ticket.issue_type}
               </div>
               {ticket.description && (
-                <div className="mt-2 text-gray-700 whitespace-pre-wrap">{ticket.description}</div>
+                <div className="mt-2 text-gray-700 whitespace-pre-wrap break-words max-w-full overflow-hidden">
+                  {ticket.description}
+                </div>
               )}
               {ticket.attachment_urls && ticket.attachment_urls.length > 0 && (
                 <div className="mt-2">
