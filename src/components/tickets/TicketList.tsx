@@ -2,9 +2,15 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, Ticket } from '@/lib/supabase';
 import { ViewType } from '@/pages/Tickets';
-import { Search, SlidersHorizontal, FileText } from 'lucide-react';
+import { Search, SlidersHorizontal, FileText, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { formatDistanceToNow } from 'date-fns';
 
 interface TicketListProps {
@@ -12,6 +18,8 @@ interface TicketListProps {
   selectedTicketId: string | null;
   onSelectTicket: (ticketId: string) => void;
 }
+
+type SortType = 'newest' | 'oldest' | 'longest-wait';
 
 const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketListProps) => {
   const { profile } = useAuth();
@@ -21,10 +29,30 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
   const [searchQuery, setSearchQuery] = useState('');
   const [topicFilter, setTopicFilter] = useState<string>('All Topics');
   const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [sortBy, setSortBy] = useState<SortType>('newest');
+  const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set());
+  const [agents, setAgents] = useState<any[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<string>('');
+  const [assigning, setAssigning] = useState(false);
 
   useEffect(() => {
     fetchTickets();
-  }, [currentView, profile, topicFilter, statusFilter, searchQuery]);
+    fetchAgents();
+  }, [currentView, profile, topicFilter, statusFilter, searchQuery, sortBy]);
+
+  const fetchAgents = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .order('full_name');
+
+      if (error) throw error;
+      setAgents(data || []);
+    } catch (error) {
+      console.error('Error fetching agents:', error);
+    }
+  };
 
   const fetchTickets = async () => {
     if (!profile) return;
@@ -33,8 +61,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
     try {
       let query = supabase
         .from('tickets')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('*');
 
       // Apply view filter
       if (currentView === 'my-open') {
@@ -64,6 +91,16 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
         );
       }
 
+      // Apply sorting
+      if (sortBy === 'newest') {
+        query = query.order('created_at', { ascending: false });
+      } else if (sortBy === 'oldest') {
+        query = query.order('created_at', { ascending: true });
+      } else if (sortBy === 'longest-wait') {
+        // For longest wait, we want oldest pending/in-progress tickets first
+        query = query.order('created_at', { ascending: true });
+      }
+
       const { data, error } = await query;
 
       if (error) throw error;
@@ -72,6 +109,58 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
       console.error('Error fetching tickets:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selectedTickets.size === tickets.length) {
+      setSelectedTickets(new Set());
+    } else {
+      setSelectedTickets(new Set(tickets.map(t => t.id)));
+    }
+  };
+
+  const handleTicketCheckbox = (ticketId: string) => {
+    const newSelected = new Set(selectedTickets);
+    if (newSelected.has(ticketId)) {
+      newSelected.delete(ticketId);
+    } else {
+      newSelected.add(ticketId);
+    }
+    setSelectedTickets(newSelected);
+  };
+
+  const handleBulkAssign = async () => {
+    if (!selectedAgent || selectedTickets.size === 0) return;
+
+    setAssigning(true);
+    try {
+      const updates = Array.from(selectedTickets).map(ticketId => ({
+        id: ticketId,
+        assigned_agent_id: selectedAgent,
+        updated_at: new Date().toISOString()
+      }));
+
+      for (const update of updates) {
+        const { error } = await supabase
+          .from('tickets')
+          .update({
+            assigned_agent_id: update.assigned_agent_id,
+            updated_at: update.updated_at
+          })
+          .eq('id', update.id);
+
+        if (error) throw error;
+      }
+
+      // Clear selection and refresh
+      setSelectedTickets(new Set());
+      setSelectedAgent('');
+      await fetchTickets();
+    } catch (error) {
+      console.error('Error assigning tickets:', error);
+    } finally {
+      setAssigning(false);
     }
   };
 
@@ -85,6 +174,17 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
         return 'status-resolved';
       default:
         return 'bg-gray-500 text-white';
+    }
+  };
+
+  const getSortLabel = (sort: SortType) => {
+    switch (sort) {
+      case 'newest':
+        return 'Newest First';
+      case 'oldest':
+        return 'Oldest First';
+      case 'longest-wait':
+        return 'Longest Wait';
     }
   };
 
@@ -102,9 +202,38 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
             >
               <Search className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon">
-              <SlidersHorizontal className="h-4 w-4" />
-            </Button>
+            
+            {/* Sort Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <SlidersHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem
+                  onClick={() => setSortBy('newest')}
+                  className="flex items-center justify-between cursor-pointer"
+                >
+                  <span>Newest First</span>
+                  {sortBy === 'newest' && <Check className="h-4 w-4" />}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setSortBy('oldest')}
+                  className="flex items-center justify-between cursor-pointer"
+                >
+                  <span>Oldest First</span>
+                  {sortBy === 'oldest' && <Check className="h-4 w-4" />}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setSortBy('longest-wait')}
+                  className="flex items-center justify-between cursor-pointer"
+                >
+                  <span>Longest Wait</span>
+                  {sortBy === 'longest-wait' && <Check className="h-4 w-4" />}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -118,7 +247,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
         )}
 
         {/* Filters */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 mb-3">
           <select
             value={topicFilter}
             onChange={(e) => setTopicFilter(e.target.value)}
@@ -143,6 +272,58 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
             <option>Resolved</option>
           </select>
         </div>
+
+        {/* Bulk Actions */}
+        {tickets.length > 0 && (
+          <div className="space-y-2 pt-2 border-t border-gray-200">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSelectAll}
+                className="flex-1"
+              >
+                {selectedTickets.size === tickets.length ? 'Deselect All' : 'Select All'}
+              </Button>
+            </div>
+
+            {selectedTickets.size > 0 && (
+              <div className="flex items-center gap-2">
+                <select
+                  value={selectedAgent}
+                  onChange={(e) => setSelectedAgent(e.target.value)}
+                  className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 hover:border-primary focus:border-primary focus:ring-2 focus:ring-blue-100 outline-none"
+                >
+                  <option value="">Select Agent</option>
+                  {agents.map((agent) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agent.full_name}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  size="sm"
+                  onClick={handleBulkAssign}
+                  disabled={!selectedAgent || assigning}
+                  className="whitespace-nowrap"
+                >
+                  {assigning ? 'Assigning...' : 'Assign'}
+                </Button>
+              </div>
+            )}
+
+            {selectedTickets.size > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {selectedTickets.size} ticket{selectedTickets.size !== 1 ? 's' : ''} selected
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Sort indicator */}
+        <p className="text-xs text-muted-foreground mt-2">
+          Sorted by: {getSortLabel(sortBy)}
+        </p>
       </div>
 
       {/* Ticket List */}
@@ -161,40 +342,52 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
           </div>
         ) : (
           tickets.map((ticket) => (
-            <button
+            <div
               key={ticket.id}
-              onClick={() => onSelectTicket(ticket.id)}
-              className={`w-full p-4 text-left hover:bg-gray-50 transition-colors ${
+              className={`flex items-start gap-3 p-4 hover:bg-gray-50 transition-colors ${
                 selectedTicketId === ticket.id ? 'bg-blue-50 border-l-4 border-primary' : ''
               }`}
             >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-semibold text-primary">
-                    {ticket.ticket_number}
+              <input
+                type="checkbox"
+                checked={selectedTickets.has(ticket.id)}
+                onChange={() => handleTicketCheckbox(ticket.id)}
+                className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                onClick={(e) => e.stopPropagation()}
+              />
+              
+              <button
+                onClick={() => onSelectTicket(ticket.id)}
+                className="flex-1 text-left"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-semibold text-primary">
+                      {ticket.ticket_number}
+                    </span>
+                  </div>
+                  <span className={`status-badge ${getStatusColor(ticket.status)}`}>
+                    {ticket.status}
                   </span>
                 </div>
-                <span className={`status-badge ${getStatusColor(ticket.status)}`}>
-                  {ticket.status}
-                </span>
-              </div>
 
-              <p className="font-medium text-gray-900 mb-1">{ticket.reseller_name}</p>
+                <p className="font-medium text-gray-900 mb-1">{ticket.reseller_name}</p>
 
-              <div className="flex gap-4 text-xs text-gray-600 mb-2">
-                <span>Order: {ticket.order_id}</span>
-                <span>Assigned: Unassigned</span>
-              </div>
+                <div className="flex gap-4 text-xs text-gray-600 mb-2">
+                  <span>Order: {ticket.order_id}</span>
+                  <span>Assigned: Unassigned</span>
+                </div>
 
-              <p className="text-xs text-gray-500 truncate mb-1">
-                {ticket.description.slice(0, 50)}...
-              </p>
+                <p className="text-xs text-gray-500 truncate mb-1">
+                  {ticket.description.slice(0, 50)}...
+                </p>
 
-              <p className="text-xs text-gray-400">
-                {formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true })}
-              </p>
-            </button>
+                <p className="text-xs text-gray-400">
+                  {formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true })}
+                </p>
+              </button>
+            </div>
           ))
         )}
       </div>

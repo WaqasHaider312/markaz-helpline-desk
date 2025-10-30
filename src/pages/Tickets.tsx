@@ -27,7 +27,10 @@ const Tickets = () => {
       <ChatPanel
         ticketId={selectedTicketId}
         onToggleInfo={() => setShowInfo(!showInfo)}
+        showInfo={showInfo}
       />
+
+      {showInfo && selectedTicketId && <InfoPanel ticketId={selectedTicketId} />}
 
       {/* Right Panel - Info */}
       <InfoPanel ticketId={selectedTicketId || 'test'} />

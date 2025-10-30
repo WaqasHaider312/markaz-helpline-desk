@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 interface ChatPanelProps {
   ticketId: string | null;
   onToggleInfo: () => void;
+  showInfo: boolean;
 }
 
 interface CannedMessage {
@@ -304,8 +305,8 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
             </span>
           </div>
           <Button variant="ghost" size="icon" onClick={onToggleInfo}>
-            <ChevronRight className={`h-5 w-5 transition-transform`} />
-         </Button>
+            <ChevronRight className={`h-5 w-5 transition-transform ${showInfo ? 'rotate-180' : ''}`} />
+          </Button>
         </div>
       </div>
 
