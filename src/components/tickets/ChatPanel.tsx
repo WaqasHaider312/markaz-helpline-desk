@@ -334,15 +334,32 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                 <div className="mt-2">
                   <span className="font-medium text-xs">Attachments:</span>
                   <div className="grid grid-cols-2 gap-2 mt-2">
-                    {ticket.attachment_urls.map((url: string, idx: number) => (
-                      <img
-                        key={idx}
-                        src={url}
-                        alt="Attachment"
-                        className="rounded-lg max-h-40 object-cover cursor-pointer hover:opacity-80"
-                        onClick={() => window.open(url, '_blank')}
-                      />
-                    ))}
+                    {ticket.attachment_urls.map((url, idx) => {
+                      const isPDF = url.toLowerCase().endsWith('.pdf');
+                      
+                      if (isPDF) {
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => window.open(url, '_blank')}
+                            className="flex items-center gap-2 p-3 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200"
+                          >
+                            <span className="text-4xl">📄</span>
+                            <span className="text-sm">PDF Document</span>
+                          </div>
+                        );
+                      }
+                      
+                      return (
+                        <img
+                          key={idx}
+                          src={url}
+                          alt="Attachment"
+                          className="rounded-lg max-h-40 object-cover cursor-pointer"
+                          onClick={() => window.open(url, '_blank')}
+                        />
+                      );
+                    })}
                   </div>
                 </div>
               )}
