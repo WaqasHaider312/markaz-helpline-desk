@@ -30,10 +30,8 @@ const Tickets = () => {
         showInfo={showInfo}
       />
 
+      {/* Right Panel - Info (Only show when ticket is selected) */}
       {showInfo && selectedTicketId && <InfoPanel ticketId={selectedTicketId} />}
-
-      {/* Right Panel - Info */}
-      <InfoPanel ticketId={selectedTicketId || 'test'} />
     </div>
   );
 };
