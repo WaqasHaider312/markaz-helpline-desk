@@ -286,7 +286,7 @@ const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
 
   if (!ticketId) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-white">
+      <div className="flex-1 min-w-0 flex flex-col items-center justify-center bg-white">
         <MessageCircle className="h-16 w-16 text-gray-400 mb-4" />
         <p className="text-lg text-gray-600">Select a ticket to view conversation</p>
       </div>
