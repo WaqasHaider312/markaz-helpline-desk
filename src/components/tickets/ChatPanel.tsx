@@ -18,7 +18,7 @@ interface CannedMessage {
   message_text: string;
 }
 
-const ChatPanel = ({ ticketId, onToggleInfo }: ChatPanelProps) => {
+const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   const { profile } = useAuth();
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
