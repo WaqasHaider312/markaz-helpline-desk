@@ -243,19 +243,26 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
       }
     };
 
-  const handleAddNote = async () => {
+    const handleAddNote = async () => {
     if (!noteText.trim() || !ticketId || !profile) return;
 
     setSending(true);
     try {
-      const { error } = await supabase.from('internal_notes').insert({
-        ticket_id: ticketId,
-        agent_id: profile.id,
-        agent_name: profile.full_name,
-        note_text: noteText.trim(),
-      });
+      const { data, error } = await supabase
+        .from('internal_notes')
+        .insert({
+          ticket_id: ticketId,
+          agent_id: profile.id,
+          agent_name: profile.full_name,
+          note_text: noteText.trim(),
+        })
+        .select()
+        .single();
 
       if (error) throw error;
+
+      // Add note to state immediately
+      setInternalNotes((prev) => [...prev, data]);  // <-- THIS LINE
 
       setNoteText('');
       toast.success('Note added');
