@@ -321,7 +321,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
             </span>
           </div>
           <Button variant="ghost" size="icon" onClick={onToggleInfo}>
-            <ChevronRight className={`h-5 w-5 transition-transform ${showInfo ? 'rotate-180' : ''}`} />
+            <ChevronRight className={`h-5 w-5 transition-transform ${showInfo ? '' : 'rotate-180'}`} />
           </Button>
         </div>
       </div>
