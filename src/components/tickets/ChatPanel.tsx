@@ -187,52 +187,61 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   };
 
   const handleSendReply = async () => {
-    if ((!replyText.trim() && !attachment) || !ticketId || !profile) return;
+      if ((!replyText.trim() && !attachment) || !ticketId || !profile) return;
 
-    setSending(true);
-    try {
-      let attachmentUrl = null;
-      if (attachment) {
-        attachmentUrl = await uploadAttachment(attachment);
-        if (!attachmentUrl) {
-          setSending(false);
-          return;
+      setSending(true);
+      try {
+        let attachmentUrl = null;
+        if (attachment) {
+          attachmentUrl = await uploadAttachment(attachment);
+          if (!attachmentUrl) {
+            setSending(false);
+            return;
+          }
         }
+
+        const newMessage = {
+          ticket_id: ticketId,
+          sender_type: 'agent' as const,
+          sender_name: profile.full_name,
+          message: replyText.trim() || 'Attachment',
+          attachment_url: attachmentUrl,
+        };
+
+        const { data, error } = await supabase
+          .from('messages')
+          .insert(newMessage)
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        // Add message to state immediately
+        setMessages((prev) => [...prev, data]);
+
+        // Auto-update status to In Progress if Pending
+        if (ticket?.status === 'Pending') {
+          await supabase
+            .from('tickets')
+            .update({ status: 'In Progress' })
+            .eq('id', ticketId);
+          
+          setTicket(prev => prev ? {...prev, status: 'In Progress'} : null);
+        }
+
+        setReplyText('');
+        setAttachment(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        toast.success('Message sent');
+      } catch (error) {
+        console.error('Error sending message:', error);
+        toast.error('Failed to send message');
+      } finally {
+        setSending(false);
       }
-
-      const { error } = await supabase.from('messages').insert({
-        ticket_id: ticketId,
-        sender_type: 'agent',
-        sender_name: profile.full_name,
-        message: replyText.trim() || 'Attachment',
-        attachment_url: attachmentUrl,
-      });
-
-      if (error) throw error;
-
-      // Auto-update status to In Progress if Pending
-      if (ticket?.status === 'Pending') {
-        await supabase
-          .from('tickets')
-          .update({ status: 'In Progress' })
-          .eq('id', ticketId);
-        
-        setTicket(prev => prev ? {...prev, status: 'In Progress'} : null);
-      }
-
-      setReplyText('');
-      setAttachment(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      toast.success('Message sent');
-    } catch (error) {
-      console.error('Error sending message:', error);
-      toast.error('Failed to send message');
-    } finally {
-      setSending(false);
-    }
-  };
+    };
 
   const handleAddNote = async () => {
     if (!noteText.trim() || !ticketId || !profile) return;
