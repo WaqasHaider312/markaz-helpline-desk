@@ -43,7 +43,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
   const fetchAgents = async () => {
     try {
       const { data, error } = await supabase
-        .from('profiles')
+        .from('agent_profiles')
         .select('id, full_name')
         .order('full_name');
 
