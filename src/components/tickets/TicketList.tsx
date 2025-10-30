@@ -68,7 +68,15 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
         query = query.eq('assigned_agent_id', profile.id).neq('status', 'Resolved');
       } else if (currentView === 'all-unresolved') {
         query = query.in('status', ['Pending', 'In Progress']);
-      } else if (currentView === 'resolved-today') {
+      } else if (currentView === 'unassigned') {
+        query = query.is('assigned_agent_id', null);
+      } else if (currentView === 'all-assigned') {
+        query = query.not('assigned_agent_id', 'is', null).neq('status', 'Resolved');
+      } else if (currentView === 'my-resolved-today') {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        query = query.eq('assigned_agent_id', profile.id).eq('status', 'Resolved').gte('updated_at', today.toISOString());
+      } else if (currentView === 'all-resolved-today') {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         query = query.eq('status', 'Resolved').gte('updated_at', today.toISOString());
@@ -189,7 +197,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
   };
 
   return (
-    <div className="w-[380px] bg-white border-r border-gray-200 flex flex-col h-full">
+    <div className="w-[320px] bg-white border-r border-gray-200 flex flex-col h-full">
       {/* Header */}
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center justify-between mb-3">

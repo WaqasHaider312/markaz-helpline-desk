@@ -4,7 +4,7 @@ import TicketList from '@/components/tickets/TicketList';
 import ChatPanel from '@/components/tickets/ChatPanel';
 import InfoPanel from '@/components/tickets/InfoPanel';
 
-export type ViewType = 'my-open' | 'all-unresolved' | 'all-tickets' | 'resolved-today';
+export type ViewType = 'my-open' | 'all-unresolved' | 'unassigned' | 'all-assigned' | 'my-resolved-today' | 'all-resolved-today';
 
 const Tickets = () => {
   const [currentView, setCurrentView] = useState<ViewType>('my-open');

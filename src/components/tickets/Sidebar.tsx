@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Star, Inbox, Clock, CheckCircle, LayoutDashboard, MessageSquare, Settings, LogOut } from 'lucide-react';
+import { Star, Inbox, Clock, CheckCircle, LayoutDashboard, MessageSquare, Settings, LogOut, UserX, Users } from 'lucide-react';
 import { ViewType } from '@/pages/Tickets';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -15,8 +15,10 @@ interface SidebarProps {
 interface ViewCounts {
   myOpen: number;
   allUnresolved: number;
-  allTickets: number;
-  resolvedToday: number;
+  unassigned: number;
+  allAssigned: number;
+  myResolvedToday: number;
+  allResolvedToday: number;
 }
 
 const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
@@ -25,8 +27,10 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
   const [counts, setCounts] = useState<ViewCounts>({
     myOpen: 0,
     allUnresolved: 0,
-    allTickets: 0,
-    resolvedToday: 0,
+    unassigned: 0,
+    allAssigned: 0,
+    myResolvedToday: 0,
+    allResolvedToday: 0,
   });
 
   useEffect(() => {
@@ -39,28 +43,45 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
     if (!profile) return;
 
     try {
-      // My Open Tickets
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // My Open Tickets (assigned to me, not resolved)
       const { count: myOpen } = await supabase
         .from('tickets')
         .select('*', { count: 'exact', head: true })
         .eq('assigned_agent_id', profile.id)
         .neq('status', 'Resolved');
 
-      // All Unresolved
+      // All Unresolved (everyone's Pending + In Progress)
       const { count: allUnresolved } = await supabase
         .from('tickets')
         .select('*', { count: 'exact', head: true })
         .in('status', ['Pending', 'In Progress']);
 
-      // All Tickets
-      const { count: allTickets } = await supabase
+      // Unassigned (no agent assigned)
+      const { count: unassigned } = await supabase
         .from('tickets')
-        .select('*', { count: 'exact', head: true });
+        .select('*', { count: 'exact', head: true })
+        .is('assigned_agent_id', null);
 
-      // Resolved Today
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const { count: resolvedToday } = await supabase
+      // All Assigned (assigned to anyone, not resolved)
+      const { count: allAssigned } = await supabase
+        .from('tickets')
+        .select('*', { count: 'exact', head: true })
+        .not('assigned_agent_id', 'is', null)
+        .neq('status', 'Resolved');
+
+      // My Resolved Today
+      const { count: myResolvedToday } = await supabase
+        .from('tickets')
+        .select('*', { count: 'exact', head: true })
+        .eq('assigned_agent_id', profile.id)
+        .eq('status', 'Resolved')
+        .gte('updated_at', today.toISOString());
+
+      // All Resolved Today
+      const { count: allResolvedToday } = await supabase
         .from('tickets')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'Resolved')
@@ -69,8 +90,10 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
       setCounts({
         myOpen: myOpen || 0,
         allUnresolved: allUnresolved || 0,
-        allTickets: allTickets || 0,
-        resolvedToday: resolvedToday || 0,
+        unassigned: unassigned || 0,
+        allAssigned: allAssigned || 0,
+        myResolvedToday: myResolvedToday || 0,
+        allResolvedToday: allResolvedToday || 0,
       });
     } catch (error) {
       console.error('Error fetching counts:', error);
@@ -80,8 +103,10 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
   const views = [
     { id: 'my-open' as ViewType, label: 'My Open Tickets', icon: Inbox, count: counts.myOpen },
     { id: 'all-unresolved' as ViewType, label: 'All Unresolved', icon: Clock, count: counts.allUnresolved },
-    { id: 'all-tickets' as ViewType, label: 'All Tickets', icon: LayoutDashboard, count: counts.allTickets },
-    { id: 'resolved-today' as ViewType, label: 'Resolved Today', icon: CheckCircle, count: counts.resolvedToday },
+    { id: 'unassigned' as ViewType, label: 'Unassigned Tickets', icon: UserX, count: counts.unassigned },
+    { id: 'all-assigned' as ViewType, label: 'All Assigned', icon: Users, count: counts.allAssigned },
+    { id: 'my-resolved-today' as ViewType, label: 'My Resolved Today', icon: CheckCircle, count: counts.myResolvedToday },
+    { id: 'all-resolved-today' as ViewType, label: 'All Resolved Today', icon: CheckCircle, count: counts.allResolvedToday },
   ];
 
   const menuItems = [
@@ -110,7 +135,7 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
       </div>
 
       {/* Views Section */}
-      <div className="py-4 px-2">
+      <div className="py-4 px-2 flex-1 overflow-y-auto">
         <h3 className="text-xs uppercase text-muted-foreground px-3 mb-2 font-medium">
           Views
         </h3>
@@ -143,7 +168,7 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
       </div>
 
       {/* Menu Section */}
-      <div className="py-4 px-2">
+      <div className="py-4 px-2 border-t border-gray-200">
         <h3 className="text-xs uppercase text-muted-foreground px-3 mb-2 font-medium">
           Menu
         </h3>
