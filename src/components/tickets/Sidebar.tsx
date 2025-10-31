@@ -142,12 +142,12 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
         {/* Toggle Button - always in same position */}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="p-1 hover:bg-gray-100 rounded transition-colors"
+          className="p-1 hover:bg-blue-50 rounded transition-colors group"
         >
           {isCollapsed ? (
-            <ChevronRight className="h-5 w-5 text-gray-600" />
+            <ChevronRight className="h-5 w-5 text-gray-600 group-hover:text-primary" />
           ) : (
-            <ChevronLeft className="h-5 w-5 text-gray-600" />
+            <ChevronLeft className="h-5 w-5 text-gray-600 group-hover:text-primary" />
           )}
         </button>
       </div>
