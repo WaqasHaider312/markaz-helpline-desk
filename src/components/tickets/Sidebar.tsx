@@ -127,29 +127,34 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
 
   return (
     <div className={`bg-white border-r border-gray-200 flex flex-col h-full transition-all duration-300 ${isCollapsed ? 'w-16' : 'w-60'}`}>
-      {/* Toggle Button */}
-      <button
-        onClick={() => setIsCollapsed(!isCollapsed)}
-        className="absolute top-4 -right-3 bg-white border border-gray-200 rounded-full p-1 hover:bg-gray-50 z-10 shadow-sm"
-      >
-        {isCollapsed ? (
-          <ChevronRight className="h-4 w-4 text-gray-600" />
-        ) : (
-          <ChevronLeft className="h-4 w-4 text-gray-600" />
-        )}
-      </button>
-
       {/* Logo */}
-      <div className="p-4 border-b border-gray-200">
+      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
         {isCollapsed ? (
-          <div className="flex justify-center">
+          <div className="flex justify-center w-full">
             <Star className="h-8 w-8 text-primary" />
           </div>
         ) : (
-          <div className="flex items-center gap-2">
-            <Star className="h-8 w-8 text-primary" />
-            <span className="text-lg font-bold text-foreground">Markaz Helpline</span>
-          </div>
+          <>
+            <div className="flex items-center gap-2">
+              <Star className="h-8 w-8 text-primary" />
+              <span className="text-lg font-bold text-foreground">Markaz Helpline</span>
+            </div>
+            {/* Toggle Button */}
+            <button
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="p-1 hover:bg-gray-100 rounded transition-colors"
+            >
+              <ChevronLeft className="h-5 w-5 text-gray-600" />
+            </button>
+          </>
+        )}
+        {isCollapsed && (
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="absolute top-4 left-1/2 -translate-x-1/2 p-1 hover:bg-gray-100 rounded transition-colors"
+          >
+            <ChevronRight className="h-5 w-5 text-gray-600" />
+          </button>
         )}
       </div>
 
