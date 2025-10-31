@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Star, Inbox, Clock, CheckCircle, LayoutDashboard, MessageSquare, Settings, LogOut, UserX, Users } from 'lucide-react';
+import { Star, Inbox, Clock, CheckCircle, LayoutDashboard, MessageSquare, Settings, LogOut, UserX, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ViewType } from '@/pages/Tickets';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ interface ViewCounts {
 const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [counts, setCounts] = useState<ViewCounts>({
     myOpen: 0,
     allUnresolved: 0,
@@ -125,20 +126,40 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
   };
 
   return (
-    <div className="w-60 bg-white border-r border-gray-200 flex flex-col h-full">
+    <div className={`bg-white border-r border-gray-200 flex flex-col h-full transition-all duration-300 ${isCollapsed ? 'w-16' : 'w-60'}`}>
+      {/* Toggle Button */}
+      <button
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        className="absolute top-4 -right-3 bg-white border border-gray-200 rounded-full p-1 hover:bg-gray-50 z-10 shadow-sm"
+      >
+        {isCollapsed ? (
+          <ChevronRight className="h-4 w-4 text-gray-600" />
+        ) : (
+          <ChevronLeft className="h-4 w-4 text-gray-600" />
+        )}
+      </button>
+
       {/* Logo */}
       <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center gap-2">
-          <Star className="h-8 w-8 text-primary" />
-          <span className="text-lg font-bold text-foreground">Markaz Helpline</span>
-        </div>
+        {isCollapsed ? (
+          <div className="flex justify-center">
+            <Star className="h-8 w-8 text-primary" />
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Star className="h-8 w-8 text-primary" />
+            <span className="text-lg font-bold text-foreground">Markaz Helpline</span>
+          </div>
+        )}
       </div>
 
       {/* Views Section */}
       <div className="py-4 px-2 flex-1 overflow-y-auto">
-        <h3 className="text-xs uppercase text-muted-foreground px-3 mb-2 font-medium">
-          Views
-        </h3>
+        {!isCollapsed && (
+          <h3 className="text-xs uppercase text-muted-foreground px-3 mb-2 font-medium">
+            Views
+          </h3>
+        )}
         <div className="space-y-1">
           {views.map((view) => {
             const Icon = view.icon;
@@ -148,19 +169,27 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
               <button
                 key={view.id}
                 onClick={() => onViewChange(view.id)}
+                title={isCollapsed ? view.label : ''}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
                   isActive
                     ? 'bg-blue-50 text-primary border-l-4 border-primary'
                     : 'text-foreground hover:bg-gray-100'
-                }`}
+                } ${isCollapsed ? 'justify-center' : ''}`}
               >
-                <div className="flex items-center gap-2">
+                <div className={`flex items-center gap-2 ${isCollapsed ? 'flex-col' : ''}`}>
                   <Icon className="h-4 w-4" />
-                  <span>{view.label}</span>
+                  {!isCollapsed && <span>{view.label}</span>}
+                  {isCollapsed && (
+                    <span className="bg-gray-200 text-gray-700 text-xs px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                      {view.count}
+                    </span>
+                  )}
                 </div>
-                <span className="bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded-full">
-                  {view.count}
-                </span>
+                {!isCollapsed && (
+                  <span className="bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded-full">
+                    {view.count}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -169,9 +198,11 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
 
       {/* Menu Section */}
       <div className="py-4 px-2 border-t border-gray-200">
-        <h3 className="text-xs uppercase text-muted-foreground px-3 mb-2 font-medium">
-          Menu
-        </h3>
+        {!isCollapsed && (
+          <h3 className="text-xs uppercase text-muted-foreground px-3 mb-2 font-medium">
+            Menu
+          </h3>
+        )}
         <div className="space-y-1">
           {menuItems.map((item) => {
             const Icon = item.icon;
@@ -180,10 +211,11 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
               <button
                 key={item.id}
                 onClick={() => navigate(item.path)}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-foreground hover:bg-gray-100 transition-colors"
+                title={isCollapsed ? item.label : ''}
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-foreground hover:bg-gray-100 transition-colors ${isCollapsed ? 'justify-center' : ''}`}
               >
                 <Icon className="h-4 w-4" />
-                <span>{item.label}</span>
+                {!isCollapsed && <span>{item.label}</span>}
               </button>
             );
           })}
@@ -192,31 +224,53 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
 
       {/* Profile Section */}
       <div className="mt-auto p-4 border-t border-gray-200">
-        <div className="flex items-center gap-3 mb-3">
-          <Avatar className="h-10 w-10">
-            <AvatarImage src={profile?.avatar_url} />
-            <AvatarFallback className="bg-primary text-white">
-              {profile?.full_name ? getInitials(profile.full_name) : 'AG'}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">
-              {profile?.full_name || 'Agent'}
-            </p>
-            <p className="text-xs text-muted-foreground truncate">
-              {profile?.email}
-            </p>
+        {isCollapsed ? (
+          <div className="flex flex-col items-center gap-3">
+            <Avatar className="h-10 w-10">
+              <AvatarImage src={profile?.avatar_url} />
+              <AvatarFallback className="bg-primary text-white">
+                {profile?.full_name ? getInitials(profile.full_name) : 'AG'}
+              </AvatarFallback>
+            </Avatar>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => signOut()}
+              className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+              title="Logout"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
           </div>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => signOut()}
-          className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
-        >
-          <LogOut className="h-4 w-4 mr-2" />
-          Logout
-        </Button>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 mb-3">
+              <Avatar className="h-10 w-10">
+                <AvatarImage src={profile?.avatar_url} />
+                <AvatarFallback className="bg-primary text-white">
+                  {profile?.full_name ? getInitials(profile.full_name) : 'AG'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">
+                  {profile?.full_name || 'Agent'}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {profile?.email}
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => signOut()}
+              className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Logout
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );
