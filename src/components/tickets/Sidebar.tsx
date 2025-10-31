@@ -130,16 +130,25 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
       {/* Logo */}
       <div className="p-4 border-b border-gray-200 flex items-center justify-between">
         {isCollapsed ? (
-          <div className="flex justify-center w-full">
-            <Star className="h-8 w-8 text-primary" />
-          </div>
+          <>
+            <div className="flex justify-center flex-1">
+              <Star className="h-8 w-8 text-primary" />
+            </div>
+            {/* Toggle Button when collapsed */}
+            <button
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="absolute top-4 right-2 p-1 hover:bg-gray-100 rounded transition-colors"
+            >
+              <ChevronRight className="h-5 w-5 text-gray-600" />
+            </button>
+          </>
         ) : (
           <>
             <div className="flex items-center gap-2">
               <Star className="h-8 w-8 text-primary" />
               <span className="text-lg font-bold text-foreground">Markaz Helpline</span>
             </div>
-            {/* Toggle Button */}
+            {/* Toggle Button when expanded */}
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}
               className="p-1 hover:bg-gray-100 rounded transition-colors"
@@ -147,14 +156,6 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
               <ChevronLeft className="h-5 w-5 text-gray-600" />
             </button>
           </>
-        )}
-        {isCollapsed && (
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="absolute top-4 left-1/2 -translate-x-1/2 p-1 hover:bg-gray-100 rounded transition-colors"
-          >
-            <ChevronRight className="h-5 w-5 text-gray-600" />
-          </button>
         )}
       </div>
 
@@ -177,7 +178,7 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
                 title={isCollapsed ? view.label : ''}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
                   isActive
-                    ? 'bg-blue-50 text-primary border-l-4 border-primary'
+                    ? 'bg-blue-50 text-primary'
                     : 'text-foreground hover:bg-gray-100'
                 } ${isCollapsed ? 'justify-center' : ''}`}
               >
