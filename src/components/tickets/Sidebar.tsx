@@ -126,41 +126,34 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
   };
 
   return (
-    <div className={`bg-white border-r border-gray-200 flex flex-col h-full transition-all duration-300 ${isCollapsed ? 'w-16' : 'w-60'}`}>
+    <div className={`bg-white border-r border-gray-200 flex flex-col h-full transition-all duration-300 relative ${isCollapsed ? 'w-16' : 'w-60'}`}>
       {/* Logo */}
       <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-        {isCollapsed ? (
-          <>
-            <div className="flex justify-center flex-1">
-              <Star className="h-8 w-8 text-primary" />
-            </div>
-            {/* Toggle Button when collapsed */}
-            <button
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className="absolute top-4 right-2 p-1 hover:bg-gray-100 rounded transition-colors"
-            >
-              <ChevronRight className="h-5 w-5 text-gray-600" />
-            </button>
-          </>
-        ) : (
-          <>
-            <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
+          {isCollapsed ? (
+            <Star className="h-8 w-8 text-primary mx-auto" />
+          ) : (
+            <>
               <Star className="h-8 w-8 text-primary" />
               <span className="text-lg font-bold text-foreground">Markaz Helpline</span>
-            </div>
-            {/* Toggle Button when expanded */}
-            <button
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className="p-1 hover:bg-gray-100 rounded transition-colors"
-            >
-              <ChevronLeft className="h-5 w-5 text-gray-600" />
-            </button>
-          </>
-        )}
+            </>
+          )}
+        </div>
+        {/* Toggle Button - always in same position */}
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="p-1 hover:bg-gray-100 rounded transition-colors"
+        >
+          {isCollapsed ? (
+            <ChevronRight className="h-5 w-5 text-gray-600" />
+          ) : (
+            <ChevronLeft className="h-5 w-5 text-gray-600" />
+          )}
+        </button>
       </div>
 
       {/* Views Section */}
-      <div className="py-4 px-2 flex-1 overflow-y-auto">
+      <div className="py-4 px-2 flex-1 overflow-hidden">
         {!isCollapsed && (
           <h3 className="text-xs uppercase text-muted-foreground px-3 mb-2 font-medium">
             Views
