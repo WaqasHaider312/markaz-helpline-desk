@@ -126,30 +126,33 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
   };
 
   return (
-    <div className={`bg-white border-r border-gray-200 flex flex-col h-full transition-all duration-300 relative ${isCollapsed ? 'w-16' : 'w-60'}`}>
+    <div className={`bg-white border-r border-gray-200 flex flex-col h-full transition-all duration-300 ${isCollapsed ? 'w-16' : 'w-60'}`}>
       {/* Logo */}
-      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {isCollapsed ? (
-            <Star className="h-8 w-8 text-primary mx-auto" />
-          ) : (
-            <>
-              <Star className="h-8 w-8 text-primary" />
-              <span className="text-lg font-bold text-foreground">Markaz Helpline</span>
-            </>
-          )}
-        </div>
-        {/* Toggle Button - always in same position */}
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="p-1 hover:bg-blue-50 rounded transition-colors group"
-        >
-          {isCollapsed ? (
-            <ChevronRight className="h-5 w-5 text-gray-600 group-hover:text-primary" />
-          ) : (
-            <ChevronLeft className="h-5 w-5 text-gray-600 group-hover:text-primary" />
-          )}
-        </button>
+      <div className="p-4 border-b border-gray-200">
+        {isCollapsed ? (
+          <div className="flex flex-col items-center gap-2">
+            <button
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="p-1 hover:bg-primary rounded transition-colors group mb-2"
+            >
+              <ChevronRight className="h-5 w-5 text-gray-600 group-hover:text-white" />
+            </button>
+            <Star className="h-8 w-8 text-primary" />
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Star className="h-8 w-8 text-primary flex-shrink-0" />
+              <span className="text-lg font-bold text-foreground whitespace-nowrap">Markaz Helpline</span>
+            </div>
+            <button
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="p-1 hover:bg-primary rounded transition-colors group flex-shrink-0"
+            >
+              <ChevronLeft className="h-5 w-5 text-gray-600 group-hover:text-white" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Views Section */}
@@ -171,7 +174,7 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
                 title={isCollapsed ? view.label : ''}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
                   isActive
-                    ? 'bg-blue-50 text-primary'
+                    ? 'text-primary font-medium'
                     : 'text-foreground hover:bg-gray-100'
                 } ${isCollapsed ? 'justify-center' : ''}`}
               >
