@@ -65,7 +65,10 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
     try {
       let query = supabase
         .from('tickets')
-        .select('*');
+        .select(`
+          *,
+          agent_profiles!assigned_agent_id(full_name)
+        `);
 
       // Apply view filter
       if (currentView === 'my-open') {
@@ -421,12 +424,12 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
                       <span>Order: {ticket.order_id}</span>
                     </div>
                     {ticket.assigned_agent_id ? (
-                      <div className="h-6 w-6 rounded-full bg-primary text-white text-xs flex items-center justify-center flex-shrink-0">
-                        {getInitials(ticket.assigned_agent_name || 'Agent')}
-                      </div>
-                    ) : (
-                      <span className="text-xs text-gray-400">Unassigned</span>
-                    )}
+                        <div className="h-6 w-6 rounded-full bg-primary text-white text-xs flex items-center justify-center flex-shrink-0">
+                          {getInitials(ticket.agent_profiles?.full_name || 'AG')}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">Unassigned</span>
+                      )}
                   </div>
 
                   <p className="text-xs text-gray-500 mb-1 line-clamp-2">
