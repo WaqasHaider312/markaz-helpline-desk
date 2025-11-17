@@ -387,8 +387,8 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
                   <span>Assigned: Unassigned</span>
                 </div>
 
-                <p className="text-xs text-gray-500 truncate mb-1">
-                  {ticket.description.slice(0, 50)}...
+                <p className="text-xs text-gray-500 line-clamp-2 mb-1">
+                  {ticket.description}
                 </p>
 
                 <p className="text-xs text-gray-400">

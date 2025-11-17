@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Star, Inbox, Clock, CheckCircle, LayoutDashboard, MessageSquare, Settings, LogOut, UserX, Users, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Star, Inbox, Clock, CheckCircle, LayoutDashboard, MessageSquare, Settings, LogOut, UserX, Users, ChevronLeft, ChevronRight, Headphones } from 'lucide-react';
 import { ViewType } from '@/pages/Tickets';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -137,7 +137,7 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
             >
               <ChevronRight className="h-5 w-5 text-gray-600 group-hover:text-white" />
             </button>
-            <Star className="h-8 w-8 text-primary" />
+            <Headphones className="h-8 w-8 text-primary" />
           </div>
         ) : (
           <div className="flex items-center justify-between">

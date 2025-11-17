@@ -545,13 +545,19 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
 
                 {/* Text Area */}
                 <Textarea
-                  placeholder="Type your message or use / for canned responses..."
-                  value={replyText}
-                  onChange={handleReplyTextChange}
-                  rows={1}
-                  className="flex-1 resize-none min-h-[40px] max-h-[120px] rounded-lg border-gray-300"
-                  maxLength={500}
-                />
+                    placeholder="Type your message or use / for canned responses..."
+                    value={replyText}
+                    onChange={handleReplyTextChange}
+                    rows={1}
+                    className="flex-1 resize-none min-h-[40px] max-h-[200px] rounded-lg border-gray-300"
+                    maxLength={500}
+                    style={{ height: 'auto', minHeight: '40px', maxHeight: '200px' }}
+                    onInput={(e) => {
+                      const target = e.target as HTMLTextAreaElement;
+                      target.style.height = 'auto';
+                      target.style.height = Math.min(target.scrollHeight, 200) + 'px';
+                    }}
+                  />
 
                 {/* Send Button */}
                 <Button
@@ -613,8 +619,14 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                   value={noteText}
                   onChange={(e) => setNoteText(e.target.value)}
                   rows={1}
-                  className="flex-1 resize-none min-h-[40px] max-h-[120px] rounded-lg bg-yellow-50 border-yellow-300"
+                  className="flex-1 resize-none min-h-[40px] max-h-[200px] rounded-lg bg-yellow-50 border-yellow-300"
                   maxLength={500}
+                  style={{ height: 'auto', minHeight: '40px', maxHeight: '200px' }}
+                  onInput={(e) => {
+                    const target = e.target as HTMLTextAreaElement;
+                    target.style.height = 'auto';
+                    target.style.height = Math.min(target.scrollHeight, 200) + 'px';
+                  }}
                 />
 
                 {/* Add Note Button */}

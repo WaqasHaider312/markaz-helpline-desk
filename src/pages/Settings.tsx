@@ -98,7 +98,7 @@ const Settings = () => {
               <p>Markaz Helpline Dashboard</p>
               <p>Version 1.0.0</p>
               <p className="pt-2 border-t">
-                For support, contact: <span className="text-primary">support@markaz.app</span>
+                For support, contact: <span className="text-primary">waqas.haider@markaz.app</span>
               </p>
             </div>
           </div>
