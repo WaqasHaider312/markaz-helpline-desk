@@ -200,41 +200,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
           setAssigning(false);
         }
       };
-
-
-      {selectedTickets.size > 0 && (
-        <div className="flex items-center gap-2">
-          <select
-            value={selectedAgent}
-            onChange={(e) => setSelectedAgent(e.target.value)}
-            className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 hover:border-primary focus:border-primary focus:ring-2 focus:ring-blue-100 outline-none"
-          >
-            <option value="">Select Agent</option>
-            {agents.map((agent) => (
-              <option key={agent.id} value={agent.id}>
-                {agent.full_name}
-              </option>
-            ))}
-          </select>
-          <Button
-            size="sm"
-            onClick={handleBulkAssign}
-            disabled={!selectedAgent || assigning}
-            className="whitespace-nowrap"
-          >
-            {assigning ? 'Assigning...' : 'Assign'}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleBulkResolve}
-            disabled={assigning}
-            className="whitespace-nowrap bg-green-50 hover:bg-green-100 text-green-700"
-          >
-            Resolve
-          </Button>
-        </div>
-      )}
+      
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Pending':
@@ -379,6 +345,15 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
                   className="whitespace-nowrap"
                 >
                   {assigning ? 'Assigning...' : 'Assign'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleBulkResolve}
+                  disabled={assigning}
+                  className="whitespace-nowrap bg-green-50 hover:bg-green-100 text-green-700"
+                >
+                  Resolve
                 </Button>
               </div>
             )}
