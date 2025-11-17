@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Star, Inbox, Clock, CheckCircle, LayoutDashboard, MessageSquare, Settings, LogOut, UserX, Users, ChevronLeft, ChevronRight, Headphones } from 'lucide-react';
+import { Inbox, Clock, CheckCircle, LayoutDashboard, MessageSquare, Settings, LogOut, UserX, Users, ChevronLeft, ChevronRight, Headphones } from 'lucide-react';
 import { ViewType } from '@/pages/Tickets';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -35,10 +35,20 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
   });
 
   useEffect(() => {
-    fetchCounts();
-    const interval = setInterval(fetchCounts, 30000);
-    return () => clearInterval(interval);
-  }, [profile]);
+      fetchCounts();
+      
+      // Real-time subscription
+      const channel = supabase
+        .channel('ticket-counts')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => {
+          fetchCounts();
+        })
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }, [profile]);
 
   const fetchCounts = async () => {
     if (!profile) return;
@@ -142,7 +152,7 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
         ) : (
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Star className="h-8 w-8 text-primary flex-shrink-0" />
+              <Headphones className="h-8 w-8 text-primary flex-shrink-0" />
               <span className="text-lg font-bold text-foreground whitespace-nowrap">Markaz Helpline</span>
             </div>
             <button

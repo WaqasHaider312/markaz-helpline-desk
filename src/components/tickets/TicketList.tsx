@@ -21,6 +21,10 @@ interface TicketListProps {
 
 type SortType = 'newest' | 'oldest' | 'longest-wait';
 
+const getInitials = (name: string) => {
+  return name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'UN';
+};
+
 const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketListProps) => {
   const { profile } = useAuth();
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -68,8 +72,9 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
         query = query.eq('assigned_agent_id', profile.id).neq('status', 'Resolved');
       } else if (currentView === 'all-unresolved') {
         query = query.in('status', ['Pending', 'In Progress']);
-      } else if (currentView === 'unassigned') {
-        query = query.is('assigned_agent_id', null);
+      } } else if (currentView === 'unassigned') {
+          query = query.is('assigned_agent_id', null).neq('status', 'Resolved');
+        }
       } else if (currentView === 'all-assigned') {
         query = query.not('assigned_agent_id', 'is', null).neq('status', 'Resolved');
       } else if (currentView === 'my-resolved-today') {
@@ -171,7 +176,65 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
       setAssigning(false);
     }
   };
+      const handleBulkResolve = async () => {
+        if (selectedTickets.size === 0) return;
 
+        setAssigning(true);
+        try {
+          for (const ticketId of Array.from(selectedTickets)) {
+            const { error } = await supabase
+              .from('tickets')
+              .update({ status: 'Resolved', updated_at: new Date().toISOString() })
+              .eq('id', ticketId);
+
+            if (error) throw error;
+          }
+
+          setSelectedTickets(new Set());
+          await fetchTickets();
+          toast.success(`${selectedTickets.size} tickets resolved`);
+        } catch (error) {
+          console.error('Error resolving tickets:', error);
+          toast.error('Failed to resolve tickets');
+        } finally {
+          setAssigning(false);
+        }
+      };
+
+
+      {selectedTickets.size > 0 && (
+        <div className="flex items-center gap-2">
+          <select
+            value={selectedAgent}
+            onChange={(e) => setSelectedAgent(e.target.value)}
+            className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 hover:border-primary focus:border-primary focus:ring-2 focus:ring-blue-100 outline-none"
+          >
+            <option value="">Select Agent</option>
+            {agents.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.full_name}
+              </option>
+            ))}
+          </select>
+          <Button
+            size="sm"
+            onClick={handleBulkAssign}
+            disabled={!selectedAgent || assigning}
+            className="whitespace-nowrap"
+          >
+            {assigning ? 'Assigning...' : 'Assign'}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleBulkResolve}
+            disabled={assigning}
+            className="whitespace-nowrap bg-green-50 hover:bg-green-100 text-green-700"
+          >
+            Resolve
+          </Button>
+        </div>
+      )}
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Pending':
@@ -335,70 +398,74 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
       </div>
 
       {/* Ticket List */}
-      <div className="flex-1 overflow-y-auto divide-y divide-gray-200">
-        {loading ? (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-muted-foreground">Loading tickets...</p>
-          </div>
-        ) : tickets.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center p-6">
-            <FileText className="h-12 w-12 text-gray-400 mb-3" />
-            <p className="text-foreground font-medium">No tickets found</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Try adjusting your filters
-            </p>
-          </div>
-        ) : (
-          tickets.map((ticket) => (
-            <div
-              key={ticket.id}
-              className={`flex items-start gap-3 p-4 hover:bg-gray-50 transition-colors ${
-                selectedTicketId === ticket.id ? 'bg-blue-50 border-l-4 border-primary' : ''
-              }`}
-            >
-              <input
-                type="checkbox"
-                checked={selectedTickets.has(ticket.id)}
-                onChange={() => handleTicketCheckbox(ticket.id)}
-                className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-                onClick={(e) => e.stopPropagation()}
-              />
-              
-              <button
+        <div className="flex-1 overflow-y-auto divide-y divide-gray-200">
+          {loading ? (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-muted-foreground">Loading tickets...</p>
+            </div>
+          ) : tickets.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center p-6">
+              <FileText className="h-12 w-12 text-gray-400 mb-3" />
+              <p className="text-foreground font-medium">No tickets found</p>
+              <p className="text-sm text-muted-foreground mt-1">Try adjusting your filters</p>
+            </div>
+          ) : (
+            tickets.map((ticket) => (
+              <div
+                key={ticket.id}
+                className={`flex items-start gap-3 p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
+                  selectedTicketId === ticket.id ? 'bg-blue-50 border-l-4 border-primary' : ''
+                }`}
                 onClick={() => onSelectTicket(ticket.id)}
-                className="flex-1 text-left"
               >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-semibold text-primary">
-                      {ticket.ticket_number}
+                <input
+                  type="checkbox"
+                  checked={selectedTickets.has(ticket.id)}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    handleTicketCheckbox(ticket.id);
+                  }}
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer flex-shrink-0"
+                />
+                
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-primary flex-shrink-0" />
+                      <span className="text-sm font-semibold text-primary">{ticket.ticket_number}</span>
+                    </div>
+                    <span className={`status-badge ${getStatusColor(ticket.status)} flex-shrink-0`}>
+                      {ticket.status}
                     </span>
                   </div>
-                  <span className={`status-badge ${getStatusColor(ticket.status)}`}>
-                    {ticket.status}
-                  </span>
+
+                  <p className="font-medium text-gray-900 mb-1 truncate">{ticket.reseller_name}</p>
+
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex gap-4 text-xs text-gray-600">
+                      <span>Order: {ticket.order_id}</span>
+                    </div>
+                    {ticket.assigned_agent_id ? (
+                      <div className="h-6 w-6 rounded-full bg-primary text-white text-xs flex items-center justify-center flex-shrink-0">
+                        {getInitials(ticket.assigned_agent_name || 'Agent')}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-400">Unassigned</span>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-gray-500 mb-1 line-clamp-2">
+                    {ticket.description}
+                  </p>
+
+                  <p className="text-xs text-gray-400">
+                    {formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true })}
+                  </p>
                 </div>
-
-                <p className="font-medium text-gray-900 mb-1">{ticket.reseller_name}</p>
-
-                <div className="flex gap-4 text-xs text-gray-600 mb-2">
-                  <span>Order: {ticket.order_id}</span>
-                  <span>Assigned: Unassigned</span>
-                </div>
-
-                <p className="text-xs text-gray-500 line-clamp-2 mb-1">
-                  {ticket.description}
-                </p>
-
-                <p className="text-xs text-gray-400">
-                  {formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true })}
-                </p>
-              </button>
-            </div>
-          ))
-        )}
-      </div>
+              </div>
+            ))
+          )}
+        </div>
     </div>
   );
 };
