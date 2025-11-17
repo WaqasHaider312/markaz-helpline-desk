@@ -74,7 +74,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
         query = query.in('status', ['Pending', 'In Progress']);
       }  else if (currentView === 'unassigned') {
           query = query.is('assigned_agent_id', null).neq('status', 'Resolved');
-        }
+        
       } else if (currentView === 'all-assigned') {
         query = query.not('assigned_agent_id', 'is', null).neq('status', 'Resolved');
       } else if (currentView === 'my-resolved-today') {
