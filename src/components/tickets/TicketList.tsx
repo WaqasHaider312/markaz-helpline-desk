@@ -72,7 +72,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
         query = query.eq('assigned_agent_id', profile.id).neq('status', 'Resolved');
       } else if (currentView === 'all-unresolved') {
         query = query.in('status', ['Pending', 'In Progress']);
-      } } else if (currentView === 'unassigned') {
+      }  else if (currentView === 'unassigned') {
           query = query.is('assigned_agent_id', null).neq('status', 'Resolved');
         }
       } else if (currentView === 'all-assigned') {
