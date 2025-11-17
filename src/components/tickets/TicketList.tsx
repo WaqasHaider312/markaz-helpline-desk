@@ -65,10 +65,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
     try {
       let query = supabase
         .from('tickets')
-        .select(`
-          *,
-          agent_profiles!assigned_agent_id(full_name)
-        `);
+        .select('*, agent_profiles(full_name)');
 
       // Apply view filter
       if (currentView === 'my-open') {
