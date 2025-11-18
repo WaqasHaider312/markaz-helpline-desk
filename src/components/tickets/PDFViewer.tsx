@@ -38,14 +38,13 @@ export function PdfViewer({ pdfUrl, onClose }: PdfViewerProps) {
       }, 100);
     } catch (error) {
       console.error('Download failed:', error);
-      alert('Download failed. Opening in new tab...');
       window.open(pdfUrl, '_blank');
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-white flex flex-col">
-      <div className="flex items-center justify-between p-4 border-b bg-gray-50">
+    <div className="fixed inset-0 z-[9999] bg-white flex flex-col">
+      <div className="flex items-center justify-between p-4 border-b bg-gray-50 flex-shrink-0">
         <Button variant="ghost" size="icon" onClick={onClose}>
           <X className="w-6 h-6" />
         </Button>
@@ -55,11 +54,13 @@ export function PdfViewer({ pdfUrl, onClose }: PdfViewerProps) {
         </Button>
       </div>
       
-      <iframe
-        src={`https://docs.google.com/viewer?url=${encodeURIComponent(pdfUrl)}&embedded=true`}
-        className="flex-1 w-full h-full border-0"
-        title="PDF Viewer"
-      />
+      <div className="flex-1 w-full h-full overflow-hidden">
+        <iframe
+          src={`https://docs.google.com/viewer?url=${encodeURIComponent(pdfUrl)}&embedded=true`}
+          className="w-full h-full border-0"
+          title="PDF Viewer"
+        />
+      </div>
     </div>
   );
 }

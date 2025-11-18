@@ -28,8 +28,8 @@ export function MediaViewer({ mediaUrl, mediaType, onClose }: MediaViewerProps) 
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black flex flex-col">
-      <div className="flex items-center justify-between p-4">
+    <div className="fixed inset-0 z-[9999] bg-black flex flex-col">
+      <div className="flex items-center justify-between p-4 bg-black/50">
         <Button
           variant="ghost"
           size="icon"
@@ -48,19 +48,21 @@ export function MediaViewer({ mediaUrl, mediaType, onClose }: MediaViewerProps) 
         </Button>
       </div>
       
-      <div className="flex-1 flex items-center justify-center p-4">
+      <div className="flex-1 flex items-center justify-center p-4 overflow-hidden">
         {mediaType === 'image' ? (
           <img
             src={mediaUrl}
             alt="Full screen"
-            className="max-w-full max-h-full object-contain"
+            className="max-w-full max-h-full w-auto h-auto object-contain"
           />
         ) : (
           <video
             src={mediaUrl}
             controls
             autoPlay
-            className="w-full h-full max-w-full max-h-full"
+            playsInline
+            className="max-w-full max-h-full w-auto h-auto"
+            style={{ maxHeight: 'calc(100vh - 80px)' }}
           />
         )}
       </div>
