@@ -1,5 +1,6 @@
-import { X, Download } from 'lucide-react';
+import { X, Download, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useEffect, useState } from 'react';
 
 interface PdfViewerProps {
   pdfUrl: string;
@@ -7,40 +8,18 @@ interface PdfViewerProps {
 }
 
 export function PdfViewer({ pdfUrl, onClose }: PdfViewerProps) {
-  const handleDownload = async () => {
-    try {
-      const response = await fetch(pdfUrl, {
-        mode: 'cors',
-        credentials: 'omit'
-      });
-      const blob = await response.blob();
-      
-      if (navigator.share && /mobile|android|iphone|ipad/i.test(navigator.userAgent)) {
-        const file = new File([blob], `document-${Date.now()}.pdf`, { type: 'application/pdf' });
-        await navigator.share({
-          files: [file],
-          title: 'PDF Document'
-        });
-        return;
-      }
-      
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.setAttribute('download', `document-${Date.now()}.pdf`);
-      document.body.appendChild(a);
-      a.click();
-      
-      setTimeout(() => {
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-      }, 100);
-    } catch (error) {
-      console.error('Download failed:', error);
-      window.open(pdfUrl, '_blank');
-    }
+  const [iframeError, setIframeError] = useState(false);
+
+  useEffect(() => {
+    // Reset error state when URL changes
+    setIframeError(false);
+  }, [pdfUrl]);
+
+  const handleDownload = () => {
+    window.open(pdfUrl, '_blank');
   };
+
+  const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(pdfUrl)}&embedded=true`;
 
   return (
     <div className="fixed inset-0 z-[9999] bg-white flex flex-col">
@@ -50,17 +29,25 @@ export function PdfViewer({ pdfUrl, onClose }: PdfViewerProps) {
         </Button>
         <h3 className="font-semibold">PDF Document</h3>
         <Button variant="ghost" size="icon" onClick={handleDownload}>
-          <Download className="w-6 h-6" />
+          <ExternalLink className="w-6 h-6" />
         </Button>
       </div>
       
-      <div className="flex-1 w-full h-full overflow-hidden">
+      {iframeError ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+          <p className="text-gray-600 mb-4">Unable to display PDF in viewer</p>
+          <Button onClick={handleDownload}>
+            Open in New Tab
+          </Button>
+        </div>
+      ) : (
         <iframe
-          src={`https://docs.google.com/viewer?url=${encodeURIComponent(pdfUrl)}&embedded=true`}
-          className="w-full h-full border-0"
+          src={viewerUrl}
+          className="flex-1 w-full border-0"
           title="PDF Viewer"
+          onError={() => setIframeError(true)}
         />
-      </div>
+      )}
     </div>
   );
 }
