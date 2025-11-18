@@ -36,7 +36,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mediaViewer, setMediaViewer] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
-  const [pdfViewer, setPdfViewer] = useState<string | null>(null);
+  const [ PdfViewer, setPdfViewer] = useState<string | null>(null);
   useEffect(() => {
     if (ticketId) {
       fetchTicketData();
@@ -723,20 +723,20 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
           )}
         </div>
       </div>
-                  {mediaViewer && (
-              <MediaViewer
-                mediaUrl={mediaViewer.url}
-                mediaType={mediaViewer.type}
-                onClose={() => setMediaViewer(null)}
-              />
-            )}
+              {mediaViewer && (
+          <MediaViewer
+            mediaUrl={mediaViewer.url}
+            mediaType={mediaViewer.type}
+            onClose={() => setMediaViewer(null)}
+          />
+        )}
 
-            {pdfViewer && (
-              <PdfViewer
-                pdfUrl={pdfViewer}
-                onClose={() => setPdfViewer(null)}
-              />
-            )}
+        {PdfViewer && (
+          <PdfViewer
+            pdfUrl={PdfViewer}
+            onClose={() => setPdfViewer(null)}
+          />
+        )}
     </div>
   );
 };
