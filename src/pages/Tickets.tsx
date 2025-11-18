@@ -4,7 +4,7 @@ import Sidebar from '@/components/tickets/Sidebar';
 import TicketList from '@/components/tickets/TicketList';
 import ChatPanel from '@/components/tickets/ChatPanel';
 import InfoPanel from '@/components/tickets/InfoPanel';
-import { useKeyboardShortcuts } from '@/components/tickets/KeyboardShortcuts';
+// import { useKeyboardShortcuts } from '@/components/tickets/KeyboardShortcuts';
 
 export type ViewType = 
   | 'my-open' 
@@ -29,10 +29,10 @@ const Tickets = () => {
     setSelectedTicketId(ticketsList[nextIndex].id);
   };
 
-  useKeyboardShortcuts({
-    onCloseTicket: () => setSelectedTicketId(null),
-    onNextTicket: handleNextTicket
-  });
+  // useKeyboardShortcuts({
+  //   onCloseTicket: () => setSelectedTicketId(null),
+  //   onNextTicket: handleNextTicket
+  // });
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
