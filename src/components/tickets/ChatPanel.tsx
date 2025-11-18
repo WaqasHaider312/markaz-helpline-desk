@@ -34,6 +34,9 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   const [cannedMessages, setCannedMessages] = useState<CannedMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [agents, setAgents] = useState<any[]>([]);
+  const [selectedAgentForAssign, setSelectedAgentForAssign] = useState('');
   const [mediaViewer, setMediaViewer] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
   useEffect(() => {
     if (ticketId) {
@@ -46,6 +49,54 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   useEffect(() => {
     scrollToBottom();
   }, [messages, internalNotes]);
+
+    const fetchAgents = async () => {
+      try {
+        const { data } = await supabase
+          .from('agent_profiles')
+          .select('id, full_name')
+          .order('full_name');
+        setAgents(data || []);
+      } catch (error) {
+        console.error('Error fetching agents:', error);
+      }
+    };
+
+    useEffect(() => {
+      fetchAgents();
+    }, []);
+
+        useKeyboardShortcuts({
+      onSendMessage: () => {
+        if (activeTab === 'reply' && (replyText.trim() || attachment)) {
+          handleSendReply();
+        } else if (activeTab === 'note' && noteText.trim()) {
+          handleAddNote();
+        }
+      },
+      onAssignTicket: () => setShowAssignDialog(true)
+    });
+
+    const handleAssignTicket = async () => {
+      if (!selectedAgentForAssign || !ticketId) return;
+
+      try {
+        const { error } = await supabase
+          .from('tickets')
+          .update({ assigned_agent_id: selectedAgentForAssign })
+          .eq('id', ticketId);
+
+        if (error) throw error;
+
+        toast.success('Ticket assigned');
+        setShowAssignDialog(false);
+        setSelectedAgentForAssign('');
+        fetchTicketData();
+      } catch (error) {
+        console.error('Error assigning ticket:', error);
+        toast.error('Failed to assign ticket');
+      }
+    };
 
   const fetchTicketData = async () => {
     if (!ticketId) return;
@@ -721,6 +772,33 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
           )}
         </div>
       </div>
+                  {showAssignDialog && (
+              <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+                <div className="bg-white rounded-lg p-6 w-96">
+                  <h3 className="text-lg font-semibold mb-4">Assign Ticket</h3>
+                  <select
+                    value={selectedAgentForAssign}
+                    onChange={(e) => setSelectedAgentForAssign(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4"
+                  >
+                    <option value="">Select Agent</option>
+                    {agents.map((agent) => (
+                      <option key={agent.id} value={agent.id}>
+                        {agent.full_name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex gap-2">
+                    <Button onClick={handleAssignTicket} disabled={!selectedAgentForAssign}>
+                      Assign
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowAssignDialog(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
               {mediaViewer && (
           <MediaViewer
             mediaUrl={mediaViewer.url}

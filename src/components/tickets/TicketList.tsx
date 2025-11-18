@@ -5,6 +5,8 @@ import { ViewType } from '@/pages/Tickets';
 import { Search, SlidersHorizontal, FileText, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useKeyboardShortcuts } from './KeyboardShortcuts';
+import { useRef } from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,11 +42,19 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
   const [agents, setAgents] = useState<any[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string>('');
   const [assigning, setAssigning] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchTickets();
     fetchAgents();
   }, [currentView, profile, topicFilter, statusFilter, searchQuery, sortBy]);
+
+  useKeyboardShortcuts({
+    onFocusSearch: () => {
+      setSearchOpen(true);
+      setTimeout(() => searchInputRef.current?.focus(), 100);
+    }
+  });
 
   const fetchAgents = async () => {
     try {
@@ -292,6 +302,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
 
         {searchOpen && (
           <Input
+            ref={searchInputRef}
             placeholder="Search tickets..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
