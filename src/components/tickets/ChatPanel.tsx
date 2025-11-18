@@ -92,7 +92,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
         toast.success('Ticket assigned');
         setShowAssignDialog(false);
         setSelectedAgentForAssign('');
-        fetchTicketData();
+        await fetchTicketData();
       } catch (error) {
         console.error('Error assigning ticket:', error);
         toast.error('Failed to assign ticket');
