@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
-
+import { MediaViewer } from './MediaViewer';
+import { PdfViewer } from './PdfViewer';
+import { FileText } from 'lucide-react';
 interface ChatPanelProps {
   ticketId: string | null;
   onToggleInfo: () => void;
@@ -33,7 +35,8 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   const [cannedMessages, setCannedMessages] = useState<CannedMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
+  const [mediaViewer, setMediaViewer] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
+  const [pdfViewer, setPdfViewer] = useState<string | null>(null);
   useEffect(() => {
     if (ticketId) {
       fetchTicketData();
@@ -353,38 +356,66 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                 </div>
               )}
               {ticket.attachment_urls && ticket.attachment_urls.length > 0 && (
-                <div className="mt-2">
-                  <span className="font-medium text-xs">Attachments:</span>
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    {ticket.attachment_urls.map((url, idx) => {
-                      const isPDF = url.toLowerCase().endsWith('.pdf');
-                      
-                      if (isPDF) {
-                        return (
-                          <div
-                            key={idx}
-                            onClick={() => window.open(url, '_blank')}
-                            className="flex items-center gap-2 p-3 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200"
-                          >
-                            <span className="text-4xl">📄</span>
-                            <span className="text-sm">PDF Document</span>
-                          </div>
-                        );
-                      }
-                      
+              <div className="mt-2">
+                <span className="font-medium text-xs">Attachments:</span>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  {ticket.attachment_urls.map((url, idx) => {
+                    const ext = url.toLowerCase().split('.').pop();
+                    
+                    if (ext === 'pdf') {
+                      return (
+                        <div
+                          key={idx}
+                          onClick={() => setPdfViewer(url)}
+                          className="flex items-center gap-2 p-3 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200"
+                        >
+                          <FileText className="w-6 h-6 text-red-600 flex-shrink-0" />
+                          <span className="text-xs font-medium">PDF</span>
+                        </div>
+                      );
+                    }
+                    
+                    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext || '')) {
                       return (
                         <img
                           key={idx}
                           src={url}
                           alt="Attachment"
-                          className="rounded-lg max-h-40 object-cover cursor-pointer"
-                          onClick={() => window.open(url, '_blank')}
+                          className="rounded-lg max-h-40 object-cover cursor-pointer hover:opacity-80"
+                          onClick={() => setMediaViewer({ url, type: 'image' })}
                         />
                       );
-                    })}
-                  </div>
+                    }
+                    
+                    if (ext === 'mp4') {
+                      return (
+                        <div 
+                          key={idx}
+                          className="relative group cursor-pointer"
+                          onClick={() => setMediaViewer({ url, type: 'video' })}
+                        >
+                          <video src={url} className="rounded-lg max-h-40 w-full object-cover" />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
+                            <span className="text-white text-xs bg-black/50 px-2 py-1 rounded">Click to view</span>
+                          </div>
+                        </div>
+                      );
+                    }
+                    
+                    return (
+                      <div
+                        key={idx}
+                        onClick={() => window.open(url, '_blank')}
+                        className="flex items-center gap-2 p-3 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200"
+                      >
+                        <FileText className="w-5 h-5 flex-shrink-0" />
+                        <span className="text-xs truncate">File</span>
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
+            )}
               <div className="text-xs text-gray-500 mt-2 text-right">
                 {formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true })}
               </div>
@@ -403,14 +434,48 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                 <div className="bg-gray-100 rounded-2xl rounded-tl-sm p-3">
                   <p className="text-xs text-gray-600 mb-1">{message.sender_name}</p>
                   <p className="text-sm text-gray-900 whitespace-pre-wrap">{message.message}</p>
-                  {message.attachment_url && (
-                    <img
-                      src={message.attachment_url}
-                      alt="Attachment"
-                      className="mt-2 rounded-lg max-h-60 cursor-pointer hover:opacity-80"
-                      onClick={() => window.open(message.attachment_url, '_blank')}
-                    />
-                  )}
+                  {message.attachment_url && (() => {
+                    const ext = message.attachment_url.toLowerCase().split('.').pop();
+                    
+                    if (ext === 'pdf') {
+                      return (
+                        <div
+                          onClick={() => setPdfViewer(message.attachment_url)}
+                          className="flex items-center gap-2 p-3 bg-white bg-opacity-20 hover:bg-opacity-30 rounded cursor-pointer mt-2"
+                        >
+                          <FileText className="w-5 h-5 text-white" />
+                          <span className="text-xs">PDF</span>
+                        </div>
+                      );
+                    }
+                    
+                    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext || '')) {
+                      return (
+                        <img
+                          src={message.attachment_url}
+                          alt="Attachment"
+                          className="mt-2 rounded-lg max-h-60 cursor-pointer hover:opacity-80"
+                          onClick={() => setMediaViewer({ url: message.attachment_url, type: 'image' })}
+                        />
+                      );
+                    }
+                    
+                    if (ext === 'mp4') {
+                      return (
+                        <div 
+                          className="mt-2 cursor-pointer relative group"
+                          onClick={() => setMediaViewer({ url: message.attachment_url, type: 'video' })}
+                        >
+                          <video src={message.attachment_url} className="rounded-lg max-h-60 w-full" />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
+                            <span className="text-white text-xs bg-black/50 px-2 py-1 rounded">Click to view</span>
+                          </div>
+                        </div>
+                      );
+                    }
+                    
+                    return null;
+                  })()}
                   <p className="text-xs text-gray-500 mt-1">
                     {formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}
                   </p>
@@ -658,6 +723,20 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
           )}
         </div>
       </div>
+                  {mediaViewer && (
+              <MediaViewer
+                mediaUrl={mediaViewer.url}
+                mediaType={mediaViewer.type}
+                onClose={() => setMediaViewer(null)}
+              />
+            )}
+
+            {pdfViewer && (
+              <PdfViewer
+                pdfUrl={pdfViewer}
+                onClose={() => setPdfViewer(null)}
+              />
+            )}
     </div>
   );
 };
