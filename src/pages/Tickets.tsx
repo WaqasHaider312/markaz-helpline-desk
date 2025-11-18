@@ -1,18 +1,41 @@
 import { useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import Sidebar from '@/components/tickets/Sidebar';
 import TicketList from '@/components/tickets/TicketList';
 import ChatPanel from '@/components/tickets/ChatPanel';
 import InfoPanel from '@/components/tickets/InfoPanel';
+import { useKeyboardShortcuts } from '@/components/tickets/KeyboardShortcuts';
 
-export type ViewType = 'my-open' | 'all-unresolved' | 'unassigned' | 'all-assigned' | 'my-resolved-today' | 'all-resolved-today';
+export type ViewType = 
+  | 'my-open' 
+  | 'all-unresolved' 
+  | 'unassigned' 
+  | 'all-assigned' 
+  | 'my-resolved-today' 
+  | 'all-resolved-today';
 
 const Tickets = () => {
+  const { profile } = useAuth();
   const [currentView, setCurrentView] = useState<ViewType>('my-open');
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [showInfo, setShowInfo] = useState(true);
+  const [ticketsList, setTicketsList] = useState<any[]>([]);
+
+  const handleNextTicket = () => {
+    if (!selectedTicketId || ticketsList.length === 0) return;
+    
+    const currentIndex = ticketsList.findIndex(t => t.id === selectedTicketId);
+    const nextIndex = (currentIndex + 1) % ticketsList.length;
+    setSelectedTicketId(ticketsList[nextIndex].id);
+  };
+
+  useKeyboardShortcuts({
+    onCloseTicket: () => setSelectedTicketId(null),
+    onNextTicket: handleNextTicket
+  });
 
   return (
-    <div className="flex h-screen w-full bg-background">
+    <div className="flex h-screen bg-background overflow-hidden">
       {/* Left Sidebar */}
       <Sidebar currentView={currentView} onViewChange={setCurrentView} />
 
@@ -33,17 +56,18 @@ const Tickets = () => {
             setCurrentView('all-assigned');
           }
         }}
+        onTicketsLoad={(tickets) => setTicketsList(tickets)}
       />
 
-      {/* Center Panel - Chat */}
+      {/* Right Panel - Chat */}
       <ChatPanel
         ticketId={selectedTicketId}
         onToggleInfo={() => setShowInfo(!showInfo)}
         showInfo={showInfo}
       />
 
-      {/* Right Panel - Info (Only show when ticket is selected) */}
-      {showInfo && selectedTicketId && <InfoPanel ticketId={selectedTicketId} />}
+      {/* Far Right - Info Panel */}
+      {showInfo && <InfoPanel ticketId={selectedTicketId} onNextTicket={handleNextTicket} />}
     </div>
   );
 };

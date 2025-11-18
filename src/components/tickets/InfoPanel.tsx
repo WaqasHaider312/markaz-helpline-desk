@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 
 interface InfoPanelProps {
   ticketId: string | null;
+  onNextTicket?: () => void;
 }
 
 interface AgentProfile {
@@ -21,10 +22,12 @@ interface AgentProfile {
   full_name: string;
 }
 
-const InfoPanel = ({ ticketId }: InfoPanelProps) => {
+const InfoPanel = ({ ticketId, onNextTicket }: InfoPanelProps) => {
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [agents, setAgents] = useState<AgentProfile[]>([]);
   const [updating, setUpdating] = useState(false);
+  const [isEditingIssueType, setIsEditingIssueType] = useState(false);
+  const [newIssueType, setNewIssueType] = useState('');
 
   useEffect(() => {
     if (ticketId) {
@@ -32,6 +35,29 @@ const InfoPanel = ({ ticketId }: InfoPanelProps) => {
       fetchAgents();
     }
   }, [ticketId]);
+
+    const handleIssueTypeChange = async () => {
+    if (!ticketId || !newIssueType) return;
+
+    setUpdating(true);
+    try {
+      const { error } = await supabase
+        .from('tickets')
+        .update({ issue_type: newIssueType })
+        .eq('id', ticketId);
+
+      if (error) throw error;
+
+      toast.success('Issue type updated');
+      setIsEditingIssueType(false);
+      fetchTicket();
+    } catch (error) {
+      console.error('Error updating issue type:', error);
+      toast.error('Failed to update issue type');
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   const fetchTicket = async () => {
     if (!ticketId) return;
@@ -84,6 +110,12 @@ const InfoPanel = ({ ticketId }: InfoPanelProps) => {
       toast.error('Failed to update status');
     } finally {
       setUpdating(false);
+    }
+        if (newStatus === 'Resolved') {
+      toast.success('Ticket resolved');
+      setTimeout(() => {
+        onNextTicket?.();
+      }, 500);
     }
   };
 
@@ -234,9 +266,47 @@ const InfoPanel = ({ ticketId }: InfoPanelProps) => {
           </div>
 
           <div>
-            <p className="text-xs text-gray-500 mb-1">Issue Type</p>
-            <p className="text-foreground">{ticket.issue_type}</p>
-          </div>
+              <p className="text-xs text-gray-500 mb-1">Issue Type</p>
+              {isEditingIssueType ? (
+                <div className="space-y-2">
+                  <select
+                    value={newIssueType}
+                    onChange={(e) => setNewIssueType(e.target.value)}
+                    className="w-full text-sm border border-gray-300 rounded px-2 py-1"
+                  >
+                    <option value="">Select Type</option>
+                    <option value="Delivery Issues">Delivery Issues</option>
+                    <option value="Payment Issues">Payment Issues</option>
+                    <option value="Return Issues">Return Issues</option>
+                    <option value="App/OTP">App/OTP</option>
+                    <option value="Other">Other</option>
+                  </select>
+                  <div className="flex gap-1">
+                    <Button size="sm" onClick={handleIssueTypeChange} disabled={updating || !newIssueType}>
+                      Save
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setIsEditingIssueType(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <p className="text-foreground">{ticket.issue_type}</p>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setIsEditingIssueType(true);
+                      setNewIssueType(ticket.issue_type);
+                    }}
+                    className="text-xs"
+                  >
+                    Edit
+                  </Button>
+                </div>
+              )}
+            </div>
 
           <div>
             <p className="text-xs text-gray-500 mb-1">Created</p>

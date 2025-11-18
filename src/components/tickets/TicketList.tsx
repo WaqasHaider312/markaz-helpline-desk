@@ -18,6 +18,7 @@ interface TicketListProps {
   selectedTicketId: string | null;
   onSelectTicket: (ticketId: string) => void;
   onTicketOpen?: (ticket: Ticket) => void;
+  onTicketsLoad?: (tickets: Ticket[]) => void;
 }
 
 type SortType = 'newest' | 'oldest' | 'longest-wait';
@@ -26,7 +27,7 @@ const getInitials = (name: string) => {
   return name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'UN';
 };
 
-const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpen }: TicketListProps) => {
+const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpen, onTicketsLoad }: TicketListProps) => {
   const { profile } = useAuth();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -119,6 +120,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
 
       if (error) throw error;
       setTickets(data || []);
+      onTicketsLoad?.(data || []);
     } catch (error) {
       console.error('Error fetching tickets:', error);
     } finally {
@@ -126,13 +128,26 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
     }
   };
 
-  const handleSelectAll = () => {
-    if (selectedTickets.size === tickets.length) {
-      setSelectedTickets(new Set());
-    } else {
-      setSelectedTickets(new Set(tickets.map(t => t.id)));
-    }
-  };
+      <select
+      onChange={(e) => {
+        const count = parseInt(e.target.value);
+        if (count === 0) {
+          setSelectedTickets(new Set());
+        } else if (count === -1) {
+          setSelectedTickets(new Set(tickets.map(t => t.id)));
+        } else {
+          setSelectedTickets(new Set(tickets.slice(0, count).map(t => t.id)));
+        }
+        e.target.value = '0';
+      }}
+      className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 hover:border-primary focus:border-primary focus:ring-2 focus:ring-blue-100 outline-none"
+    >
+      <option value="0">Select Tickets...</option>
+      <option value="20">Select 20</option>
+      <option value="30">Select 30</option>
+      <option value="50">Select 50</option>
+      <option value="-1">Select All ({tickets.length})</option>
+    </select>
 
   const handleTicketCheckbox = (ticketId: string) => {
     const newSelected = new Set(selectedTickets);
