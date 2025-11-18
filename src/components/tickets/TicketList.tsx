@@ -327,18 +327,31 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
         </div>
 
         {/* Bulk Actions */}
-        {tickets.length > 0 && (
-          <div className="space-y-2 pt-2 border-t border-gray-200">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSelectAll}
-                className="flex-1"
-              >
-                {selectedTickets.size === tickets.length ? 'Deselect All' : 'Select All'}
-              </Button>
-            </div>
+          {tickets.length > 0 && (
+            <div className="space-y-2 pt-2 border-t border-gray-200">
+              <div className="flex items-center gap-2">
+                <select
+                  onChange={(e) => {
+                    const count = parseInt(e.target.value);
+                    if (count === 0) {
+                      setSelectedTickets(new Set());
+                    } else if (count === -1) {
+                      setSelectedTickets(new Set(tickets.map(t => t.id)));
+                    } else {
+                      setSelectedTickets(new Set(tickets.slice(0, count).map(t => t.id)));
+                    }
+                    e.target.value = '0';
+                  }}
+                  className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 hover:border-primary focus:border-primary focus:ring-2 focus:ring-blue-100 outline-none"
+                >
+                  <option value="0">Select Tickets...</option>
+                  <option value="20">Select 20</option>
+                  <option value="30">Select 30</option>
+                  <option value="50">Select 50</option>
+                  <option value="-1">Select All ({tickets.length})</option>
+                </select>
+              </div>
+            
 
             {selectedTickets.size > 0 && (
               <div className="flex items-center gap-2">
