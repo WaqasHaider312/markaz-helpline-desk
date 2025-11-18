@@ -8,6 +8,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import { MediaViewer } from './MediaViewer';
 import { FileText } from 'lucide-react';
+import { useKeyboardShortcuts } from './KeyboardShortcuts';
 interface ChatPanelProps {
   ticketId: string | null;
   onToggleInfo: () => void;
@@ -66,7 +67,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
       fetchAgents();
     }, []);
 
-        useKeyboardShortcuts({
+    useKeyboardShortcuts({
       onSendMessage: () => {
         if (activeTab === 'reply' && (replyText.trim() || attachment)) {
           handleSendReply();
