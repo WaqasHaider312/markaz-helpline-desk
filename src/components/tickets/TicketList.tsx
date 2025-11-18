@@ -183,9 +183,9 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
         const { error } = await supabase
           .from('tickets')
           .update({
-            assigned_agent_id: update.assigned_agent_id,
-            updated_at: update.updated_at
-          })
+          assigned_agent_id: selectedAgent === 'unassign' ? null : selectedAgent,
+          updated_at: update.updated_at
+        })
           .eq('id', update.id);
 
         if (error) throw error;
@@ -369,9 +369,10 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
                 <select
                   value={selectedAgent}
                   onChange={(e) => setSelectedAgent(e.target.value)}
-                  className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 hover:border-primary focus:border-primary focus:ring-2 focus:ring-blue-100 outline-none"
+                  className="..."
                 >
                   <option value="">Select Agent</option>
+                  <option value="unassign">Unassign Tickets</option>
                   {agents.map((agent) => (
                     <option key={agent.id} value={agent.id}>
                       {agent.full_name}
