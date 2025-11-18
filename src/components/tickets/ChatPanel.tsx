@@ -218,20 +218,23 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
 
           setMessages((prev) => [...prev, data]);
 
-          // Auto-assign + update status if not assigned or pending
-          const updates: any = {};
-          if (ticket?.status === 'Pending') {
-            updates.status = 'In Progress';
-          }
-          if (!ticket?.assigned_agent_id && profile?.id) {
-            updates.assigned_agent_id = profile.id;
-            updates.assigned_agent_name = profile.full_name;
-          }
+          // Auto-assign + update status
+            const updates: any = { updated_at: new Date().toISOString() };
+            if (ticket?.status === 'Pending') {
+              updates.status = 'In Progress';
+            }
+            if (!ticket?.assigned_agent_id && profile?.id) {
+              updates.assigned_agent_id = profile.id;
+            }
 
-          if (Object.keys(updates).length > 0) {
-            await supabase.from('tickets').update(updates).eq('id', ticketId);
-            setTicket(prev => prev ? {...prev, ...updates} : null);
-          }
+            const { error: updateError } = await supabase
+              .from('tickets')
+              .update(updates)
+              .eq('id', ticketId);
+
+            if (!updateError) {
+              setTicket(prev => prev ? {...prev, ...updates} : null);
+            }
         setReplyText('');
         setAttachment(null);
         if (fileInputRef.current) {

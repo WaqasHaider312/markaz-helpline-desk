@@ -348,10 +348,9 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
                 </Button>
                 <Button
                   size="sm"
-                  variant="outline"
                   onClick={handleBulkResolve}
                   disabled={assigning}
-                  className="whitespace-nowrap bg-green-50 hover:bg-green-100 text-green-700"
+                  className="whitespace-nowrap bg-green-600 hover:bg-green-700 text-white"
                 >
                   Resolve
                 </Button>
