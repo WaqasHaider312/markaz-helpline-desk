@@ -37,13 +37,13 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
   useEffect(() => {
       fetchCounts();
       
-      // Real-time subscription
-      const channel = supabase
-        .channel('ticket-counts')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => {
-          fetchCounts();
-        })
-        .subscribe();
+      // // Real-time subscription
+      // const channel = supabase
+      //   .channel('ticket-counts')
+      //   .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => {
+      //     fetchCounts();
+      //   })
+      //   .subscribe();
 
       return () => {
         supabase.removeChannel(channel);
