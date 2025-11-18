@@ -7,7 +7,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import { MediaViewer } from './MediaViewer';
-import { PdfViewer } from './PdfViewer';
 import { FileText } from 'lucide-react';
 interface ChatPanelProps {
   ticketId: string | null;
@@ -36,7 +35,6 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mediaViewer, setMediaViewer] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
-  const [ PdfViewer, setPdfViewer] = useState<string | null>(null);
   useEffect(() => {
     if (ticketId) {
       fetchTicketData();
@@ -366,7 +364,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                       return (
                         <div
                           key={idx}
-                          onClick={() => setPdfViewer(url)}
+                          onClick={() => window.open(url, '_blank')}
                           className="flex items-center gap-2 p-3 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200"
                         >
                           <FileText className="w-6 h-6 text-red-600 flex-shrink-0" />
@@ -440,7 +438,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                     if (ext === 'pdf') {
                       return (
                         <div
-                          onClick={() => setPdfViewer(message.attachment_url)}
+                          onClick={() => window.open(message.attachment_url, '_blank')}
                           className="flex items-center gap-2 p-3 bg-white bg-opacity-20 hover:bg-opacity-30 rounded cursor-pointer mt-2"
                         >
                           <FileText className="w-5 h-5 text-white" />
@@ -728,13 +726,6 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
             mediaUrl={mediaViewer.url}
             mediaType={mediaViewer.type}
             onClose={() => setMediaViewer(null)}
-          />
-        )}
-
-        {PdfViewer && (
-          <PdfViewer
-            pdfUrl={PdfViewer}
-            onClose={() => setPdfViewer(null)}
           />
         )}
     </div>
