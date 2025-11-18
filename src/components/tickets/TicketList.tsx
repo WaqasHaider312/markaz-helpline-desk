@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, Ticket } from '@/lib/supabase';
 import { ViewType } from '@/pages/Tickets';
@@ -6,7 +6,6 @@ import { Search, SlidersHorizontal, FileText, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useKeyboardShortcuts } from './KeyboardShortcuts';
-import { useRef } from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
