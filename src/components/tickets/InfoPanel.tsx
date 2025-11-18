@@ -50,7 +50,10 @@ const InfoPanel = ({ ticketId, onNextTicket }: InfoPanelProps) => {
 
       toast.success('Issue type updated');
       setIsEditingIssueType(false);
-      fetchTicket();
+      const updated = await fetchTicket();
+      if (updated) {
+        setTicket(updated);
+      }
     } catch (error) {
       console.error('Error updating issue type:', error);
       toast.error('Failed to update issue type');
@@ -71,8 +74,10 @@ const InfoPanel = ({ ticketId, onNextTicket }: InfoPanelProps) => {
 
       if (error) throw error;
       setTicket(data);
+      return data;
     } catch (error) {
       console.error('Error fetching ticket:', error);
+      return null;
     }
   };
 
