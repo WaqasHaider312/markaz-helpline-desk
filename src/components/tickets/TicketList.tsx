@@ -345,6 +345,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
                   className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 hover:border-primary focus:border-primary focus:ring-2 focus:ring-blue-100 outline-none"
                 >
                   <option value="0">Select Tickets...</option>
+                  <option value="0">Deselect All</option>
                   <option value="20">Select 20</option>
                   <option value="30">Select 30</option>
                   <option value="50">Select 50</option>
