@@ -21,6 +21,18 @@ const Tickets = () => {
         currentView={currentView}
         selectedTicketId={selectedTicketId}
         onSelectTicket={setSelectedTicketId}
+        onTicketOpen={(ticket) => {
+          // Auto-switch view based on ticket
+          if (!ticket.assigned_agent_id) {
+            setCurrentView('unassigned');
+          } else if (ticket.assigned_agent_id === profile?.id && ticket.status !== 'Resolved') {
+            setCurrentView('my-open');
+          } else if (ticket.status === 'Resolved') {
+            setCurrentView('all-resolved-today');
+          } else {
+            setCurrentView('all-assigned');
+          }
+        }}
       />
 
       {/* Center Panel - Chat */}

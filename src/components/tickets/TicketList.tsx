@@ -17,6 +17,7 @@ interface TicketListProps {
   currentView: ViewType;
   selectedTicketId: string | null;
   onSelectTicket: (ticketId: string) => void;
+  onTicketOpen?: (ticket: Ticket) => void;
 }
 
 type SortType = 'newest' | 'oldest' | 'longest-wait';
@@ -25,7 +26,7 @@ const getInitials = (name: string) => {
   return name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'UN';
 };
 
-const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketListProps) => {
+const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpen }: TicketListProps) => {
   const { profile } = useAuth();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -390,7 +391,10 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket }: TicketLis
                 className={`flex items-start gap-3 p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
                   selectedTicketId === ticket.id ? 'bg-blue-50 border-l-4 border-primary' : ''
                 }`}
-                onClick={() => onSelectTicket(ticket.id)}
+                onClick={() => {
+                  onSelectTicket(ticket.id);
+                  onTicketOpen?.(ticket);
+                }}
               >
                 <input
                   type="checkbox"
