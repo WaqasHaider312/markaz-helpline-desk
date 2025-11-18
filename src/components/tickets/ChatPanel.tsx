@@ -84,7 +84,9 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
       try {
         const { error } = await supabase
           .from('tickets')
-          .update({ assigned_agent_id: selectedAgentForAssign })
+          .update({ 
+            assigned_agent_id: selectedAgentForAssign === 'unassign' ? null : selectedAgentForAssign 
+          })
           .eq('id', ticketId);
 
         if (error) throw error;
@@ -783,6 +785,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 mb-4"
                   >
                     <option value="">Select Agent</option>
+                    <option value="unassign">Unassign Ticket</option>
                     {agents.map((agent) => (
                       <option key={agent.id} value={agent.id}>
                         {agent.full_name}
