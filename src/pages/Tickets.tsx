@@ -71,7 +71,13 @@ const Tickets = () => {
       />
 
       {/* Far Right - Info Panel */}
-      {showInfo && <InfoPanel ticketId={selectedTicketId} onNextTicket={handleNextTicket} />}
+      {showInfo && (
+            <InfoPanel 
+              ticketId={selectedTicketId} 
+              onNextTicket={handleNextTicket}
+              onClose={() => setSelectedTicketId(null)}
+            />
+          )}
     </div>
   );
 };

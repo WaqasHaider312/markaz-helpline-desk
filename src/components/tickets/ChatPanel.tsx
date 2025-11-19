@@ -38,6 +38,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [agents, setAgents] = useState<any[]>([]);
   const [selectedAgentForAssign, setSelectedAgentForAssign] = useState('');
+  const [activities, setActivities] = useState<any[]>([]);
   const [mediaViewer, setMediaViewer] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
   useEffect(() => {
     if (ticketId) {
@@ -123,6 +124,13 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
         .eq('ticket_id', ticketId)
         .order('created_at', { ascending: true });
 
+      const { data: activitiesData } = await supabase
+        .from('ticket_activities')
+        .select('*')
+        .eq('ticket_id', ticketId)
+        .order('created_at', { ascending: true });
+
+      setActivities(activitiesData || []);
       setTicket(ticketData);
       setMessages(messagesData || []);
       setInternalNotes(notesData || []);
@@ -138,7 +146,6 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
       const { data } = await supabase
         .from('canned_messages')
         .select('*')
-        .eq('agent_id', profile.id)
         .order('created_at', { ascending: false });
 
       setCannedMessages(data || []);
@@ -180,9 +187,26 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
       )
       .subscribe();
 
+    const activitiesChannel = supabase
+      .channel('ticket-activities')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'ticket_activities',
+          filter: `ticket_id=eq.${ticketId}`,
+        },
+        (payload) => {
+          setActivities((prev) => [...prev, payload.new]);
+        }
+      )
+      .subscribe();
+
     return () => {
       supabase.removeChannel(messagesChannel);
       supabase.removeChannel(notesChannel);
+      supabase.removeChannel(activitiesChannel);
     };
   };
 
@@ -273,6 +297,19 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
 
           setMessages((prev) => [...prev, data]);
 
+          // Update latest message in ticket
+          await supabase
+            .from('tickets')
+            .update({
+              latest_message: replyText.trim() || 'Attachment',
+              latest_message_at: new Date().toISOString(),
+              latest_message_sender: 'agent',
+              unread_by_agent: false
+            })
+            .eq('id', ticketId);
+
+          setMessages((prev) => [...prev, data]);
+
           // Auto-assign + update status
             const updates: any = { updated_at: new Date().toISOString() };
             if (ticket?.status === 'Pending') {
@@ -281,7 +318,20 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
             if (!ticket?.assigned_agent_id && profile?.id) {
               updates.assigned_agent_id = profile.id;
             }
-
+            if (Object.keys(updates).length > 0) {
+              await supabase.from('tickets').update(updates).eq('id', ticketId);
+              setTicket(prev => prev ? {...prev, ...updates} : null);
+              
+              // Create activity if auto-assigned
+              if (updates.assigned_agent_id) {
+                await supabase.from('ticket_activities').insert({
+                  ticket_id: ticketId,
+                  activity_type: 'assigned',
+                  actor_name: profile?.full_name || 'Agent',
+                  details: `${profile?.full_name} assigned ticket to self`
+                });
+              }
+            }
             const { error: updateError } = await supabase
               .from('tickets')
               .update(updates)

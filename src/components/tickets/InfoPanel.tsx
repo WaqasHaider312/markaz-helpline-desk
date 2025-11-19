@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase, Ticket } from '@/lib/supabase';
-import { Copy } from 'lucide-react';
+import { Copy, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 interface InfoPanelProps {
   ticketId: string | null;
   onNextTicket?: () => void;
+  onClose?: () => void;
 }
 
 interface AgentProfile {
@@ -22,7 +23,7 @@ interface AgentProfile {
   full_name: string;
 }
 
-const InfoPanel = ({ ticketId, onNextTicket }: InfoPanelProps) => {
+const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [agents, setAgents] = useState<AgentProfile[]>([]);
   const [updating, setUpdating] = useState(false);
@@ -113,36 +114,74 @@ const InfoPanel = ({ ticketId, onNextTicket }: InfoPanelProps) => {
       if (error) throw error;
 
       setTicket(prev => prev ? { ...prev, status: newStatus } : null);
+      
+      // Create activity record
+      let activityDetails = '';
+      if (newStatus === 'Resolved') {
+        activityDetails = `${profile?.full_name} marked ticket as Resolved`;
+      } else if (newStatus === 'Pending') {
+        activityDetails = `${profile?.full_name} reopened the ticket`;
+      } else {
+        activityDetails = `${profile?.full_name} changed status to ${newStatus}`;
+      }
+      
+      await supabase.from('ticket_activities').insert({
+        ticket_id: ticketId,
+        activity_type: 'status_changed',
+        actor_name: profile?.full_name || 'Agent',
+        details: activityDetails
+      });
+
       toast.success(`Status updated to ${newStatus}`);
-      fetchTicket(); // Refresh
+      
+      if (newStatus === 'Resolved') {
+        setTimeout(() => {
+          onNextTicket?.();
+        }, 500);
+      }
+      
+      await fetchTicket();
     } catch (error) {
       console.error('Error updating status:', error);
       toast.error('Failed to update status');
     } finally {
       setUpdating(false);
     }
-        if (newStatus === 'Resolved') {
-      toast.success('Ticket resolved');
-      setTimeout(() => {
-        onNextTicket?.();
-      }, 500);
-    }
   };
 
   const handleAssignChange = async (agentId: string) => {
-    if (!ticketId) return;
+  if (!ticketId) return;
 
-    setUpdating(true);
-    try {
-      const { error } = await supabase
-        .from('tickets')
-        .update({ assigned_agent_id: agentId === 'unassigned' ? null : agentId })
-        .eq('id', ticketId);
+  setUpdating(true);
+  try {
+    const { error } = await supabase
+      .from('tickets')
+      .update({ assigned_agent_id: agentId === 'unassigned' ? null : agentId })
+      .eq('id', ticketId);
 
-      if (error) throw error;
+    if (error) throw error;
+
+    // Create activity record
+    const assignedTo = agentId === 'unassigned' ? null : agents.find(a => a.id === agentId)?.full_name;
+      let activityDetails = '';
+
+      if (agentId === 'unassigned') {
+        activityDetails = `${profile?.full_name} unassigned the ticket`;
+      } else if (agentId === profile?.id) {
+        activityDetails = `${profile?.full_name} assigned ticket to self`;
+      } else {
+        activityDetails = `${profile?.full_name} assigned ticket to ${assignedTo}`;
+      }
+
+      await supabase.from('ticket_activities').insert({
+        ticket_id: ticketId,
+        activity_type: 'assigned',
+        actor_name: profile?.full_name || 'Agent',
+        details: activityDetails
+      });
 
       toast.success('Assignment updated');
-      fetchTicket(); // Refresh
+      await fetchTicket();
     } catch (error) {
       console.error('Error updating assignment:', error);
       toast.error('Failed to update assignment');
@@ -216,7 +255,8 @@ const InfoPanel = ({ ticketId, onNextTicket }: InfoPanelProps) => {
           </Select>
         </div>
       </div>
-{/* Quick Actions */}
+
+      {/* Quick Actions */}
       <div className="p-4">
         <h4 className="text-xs font-medium text-gray-600 mb-3">Quick Actions</h4>
         <div className="space-y-2">
@@ -232,7 +272,15 @@ const InfoPanel = ({ ticketId, onNextTicket }: InfoPanelProps) => {
             Copy Link
           </Button>
           
-          {ticket.status !== 'Resolved' && (
+          {ticket.status === 'Resolved' ? (
+            <Button
+              className="w-full justify-start text-sm bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={() => handleStatusChange('Pending')}
+              disabled={updating}
+            >
+              ↻ Reopen Ticket
+            </Button>
+          ) : (
             <Button
               className="w-full justify-start text-sm bg-green-600 hover:bg-green-700 text-white"
               onClick={() => handleStatusChange('Resolved')}
@@ -241,6 +289,15 @@ const InfoPanel = ({ ticketId, onNextTicket }: InfoPanelProps) => {
               ✓ Mark Resolved
             </Button>
           )}
+
+          <Button
+            variant="outline"
+            className="w-full justify-start text-sm text-red-600 hover:text-red-700 hover:bg-red-50"
+            onClick={onClose}
+          >
+            <X className="h-4 w-4 mr-2" />
+            Close Ticket View
+          </Button>
         </div>
       </div>
 

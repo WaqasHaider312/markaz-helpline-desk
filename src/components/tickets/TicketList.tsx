@@ -183,13 +183,33 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
         const { error } = await supabase
           .from('tickets')
           .update({
-          assigned_agent_id: selectedAgent === 'unassign' ? null : selectedAgent,
-          updated_at: update.updated_at
-        })
+            assigned_agent_id: selectedAgent === 'unassign' ? null : selectedAgent,
+            updated_at: update.updated_at
+          })
           .eq('id', update.id);
 
         if (error) throw error;
+        
+        // Create activity for each ticket
+        const assignedTo = selectedAgent === 'unassign' ? null : agents.find(a => a.id === selectedAgent)?.full_name;
+        let activityDetails = '';
+        
+        if (selectedAgent === 'unassign') {
+          activityDetails = `${profile?.full_name} unassigned the ticket`;
+        } else if (selectedAgent === profile?.id) {
+          activityDetails = `${profile?.full_name} assigned ticket to self`;
+        } else {
+          activityDetails = `${profile?.full_name} assigned ticket to ${assignedTo}`;
+        }
+        
+        await supabase.from('ticket_activities').insert({
+          ticket_id: update.id,
+          activity_type: 'assigned',
+          actor_name: profile?.full_name || 'Agent',
+          details: activityDetails
+        });
       }
+      
 
       // Clear selection and refresh
       setSelectedTickets(new Set());
@@ -217,6 +237,14 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
               .eq('id', ticketId);
 
             if (error) throw error;
+
+            // Create activity
+            await supabase.from('ticket_activities').insert({
+              ticket_id: ticketId,
+              activity_type: 'status_changed',
+              actor_name: profile?.full_name || 'Agent',
+              details: `${profile?.full_name} marked ticket as Resolved`
+            });
           }
 
           setSelectedTickets(new Set());
@@ -477,11 +505,21 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
                   </div>
 
                   <p className="text-xs text-gray-500 mb-1 line-clamp-2">
-                    {ticket.description}
+                    {ticket.latest_message || ticket.description}
                   </p>
 
+                  {ticket.unread_by_agent && ticket.latest_message_sender === 'reseller' && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className="h-2 w-2 bg-blue-500 rounded-full animate-pulse"></span>
+                      <span className="text-xs text-blue-600 font-medium">New message</span>
+                    </div>
+                  )}
+
                   <p className="text-xs text-gray-400">
-                    {formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true })}
+                    {ticket.latest_message_at 
+                      ? formatDistanceToNow(new Date(ticket.latest_message_at), { addSuffix: true })
+                      : formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true })
+                    }
                   </p>
                 </div>
               </div>
