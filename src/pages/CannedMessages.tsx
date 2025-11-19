@@ -48,7 +48,6 @@ const CannedMessages = () => {
       const { data, error } = await supabase
         .from('canned_messages')
         .select('*')
-        .eq('agent_id', profile.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
