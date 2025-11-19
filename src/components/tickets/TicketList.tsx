@@ -22,7 +22,7 @@ interface TicketListProps {
   onTicketsLoad?: (tickets: Ticket[]) => void;
 }
 
-type SortType = 'newest' | 'oldest' | 'longest-wait';
+type SortType = 'newest' | 'oldest' | 'longest-wait' | 'unread';
 
 const getInitials = (name: string) => {
   return name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'UN';
@@ -116,14 +116,15 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
       }
 
       // Apply sorting
-      if (sortBy === 'newest') {
-        query = query.order('created_at', { ascending: false });
-      } else if (sortBy === 'oldest') {
-        query = query.order('created_at', { ascending: true });
-      } else if (sortBy === 'longest-wait') {
-        // For longest wait, we want oldest pending/in-progress tickets first
-        query = query.order('created_at', { ascending: true });
-      }
+      if (sortBy === 'unread') {
+          query = query.eq('unread_by_agent', true).order('latest_message_at', { ascending: false });
+        } else if (sortBy === 'newest') {
+          query = query.order('created_at', { ascending: false });
+        } else if (sortBy === 'oldest') {
+          query = query.order('created_at', { ascending: true });
+        } else if (sortBy === 'longest-wait') {
+          query = query.order('created_at', { ascending: true });
+        }
 
       const { data, error } = await query;
 
@@ -325,6 +326,13 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
                 >
                   <span>Longest Wait</span>
                   {sortBy === 'longest-wait' && <Check className="h-4 w-4" />}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setSortBy('unread')}
+                  className="flex items-center justify-between cursor-pointer"
+                >
+                  <span>Unread Messages</span>
+                  {sortBy === 'unread' && <Check className="h-4 w-4" />}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

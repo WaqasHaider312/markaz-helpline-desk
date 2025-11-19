@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase, Ticket } from '@/lib/supabase';
 import { Copy, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Select,
   SelectContent,
@@ -29,6 +30,7 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
   const [updating, setUpdating] = useState(false);
   const [isEditingIssueType, setIsEditingIssueType] = useState(false);
   const [newIssueType, setNewIssueType] = useState('');
+  const { profile } = useAuth();
 
   useEffect(() => {
     if (ticketId) {
