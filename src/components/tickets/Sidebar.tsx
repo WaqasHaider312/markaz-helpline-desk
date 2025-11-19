@@ -6,6 +6,7 @@ import { Inbox, Clock, CheckCircle, LayoutDashboard, MessageSquare, Settings, Lo
 import { ViewType } from '@/pages/Tickets';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { useTickets } from '@/contexts/TicketsContext';
 
 interface SidebarProps {
   currentView: ViewType;
@@ -14,7 +15,6 @@ interface SidebarProps {
 
 interface ViewCounts {
   myOpen: number;
-  allUnresolved: number;
   unassigned: number;
   allAssigned: number;
   myResolvedToday: number;
@@ -25,9 +25,9 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const { tickets } = useTickets();
   const [counts, setCounts] = useState<ViewCounts>({
     myOpen: 0,
-    allUnresolved: 0,
     unassigned: 0,
     allAssigned: 0,
     myResolvedToday: 0,

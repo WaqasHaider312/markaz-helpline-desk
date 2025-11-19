@@ -6,6 +6,7 @@ import { Search, SlidersHorizontal, FileText, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useKeyboardShortcuts } from './KeyboardShortcuts';
+import { useTickets } from '@/contexts/TicketsContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { formatDistanceToNow } from 'date-fns';
+import { toast } from 'sonner';
 
 interface TicketListProps {
   currentView: ViewType;
@@ -30,7 +32,8 @@ const getInitials = (name: string) => {
 
 const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpen, onTicketsLoad }: TicketListProps) => {
   const { profile } = useAuth();
-  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const { tickets: allTickets } = useTickets();
+  const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -44,9 +47,62 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    fetchTickets();
     fetchAgents();
-  }, [currentView, profile, topicFilter, statusFilter, searchQuery, sortBy]);
+  }, []);
+
+  useEffect(() => {
+    if (!profile) return;
+
+    let filtered = [...allTickets];
+
+    // Apply view filter
+    if (currentView === 'my-open') {
+      filtered = filtered.filter(t => t.assigned_agent_id === profile.id && t.status !== 'Resolved');
+    } else if (currentView === 'all-assigned') {
+      filtered = filtered.filter(t => t.status !== 'Resolved' && t.assigned_agent_id !== null);
+    } else if (currentView === 'unassigned') {
+      filtered = filtered.filter(t => t.assigned_agent_id === null && t.status !== 'Resolved');
+    } else if (currentView === 'my-resolved-today') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      filtered = filtered.filter(t => (t as any).resolved_by === profile.id && t.status === 'Resolved' && new Date(t.updated_at) >= today);
+    } else if (currentView === 'all-resolved-today') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      filtered = filtered.filter(t => t.status === 'Resolved' && new Date(t.updated_at) >= today);
+    }
+
+    // Apply filters
+    if (topicFilter !== 'All Topics') {
+      filtered = filtered.filter(t => t.issue_type === topicFilter);
+    }
+    if (statusFilter !== 'All') {
+      filtered = filtered.filter(t => t.status === statusFilter);
+    }
+    if (searchQuery) {
+      filtered = filtered.filter(t => 
+        t.ticket_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.reseller_phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.order_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.reseller_name?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    // Apply sorting
+    if (sortBy === 'unread') {
+      filtered = filtered.filter(t => t.unread_by_agent).sort((a, b) => 
+        new Date(b.latest_message_at || b.created_at).getTime() - new Date(a.latest_message_at || a.created_at).getTime()
+      );
+    } else if (sortBy === 'newest') {
+      filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    } else if (sortBy === 'oldest' || sortBy === 'longest-wait') {
+      filtered.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    }
+
+    setFilteredTickets(filtered);
+    onTicketsLoad?.(filtered);
+    setLoading(false);
+  }, [allTickets, currentView, profile, topicFilter, statusFilter, searchQuery, sortBy]);
 
   useKeyboardShortcuts({
     onFocusSearch: () => {
@@ -68,96 +124,6 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
       console.error('Error fetching agents:', error);
     }
   };
-
-  const fetchTickets = async () => {
-    if (!profile) return;
-
-    setLoading(true);
-    try {
-      let query = supabase
-        .from('tickets')
-        .select('*, agent_profiles!assigned_agent_id(full_name)');
-
-      // Apply view filter
-      if (currentView === 'my-open') {
-        query = query.eq('assigned_agent_id', profile.id).neq('status', 'Resolved');
-      } else if (currentView === 'all-unresolved') {
-        query = query.in('status', ['Pending', 'In Progress']).not('assigned_agent_id', 'is', null);
-      }  else if (currentView === 'unassigned') {
-          query = query.is('assigned_agent_id', null).neq('status', 'Resolved');
-        
-      } else if (currentView === 'all-assigned') {
-        query = query.not('assigned_agent_id', 'is', null).neq('status', 'Resolved');
-      } else if (currentView === 'my-resolved-today') {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        query = query.eq('resolved_by', profile.id).eq('status', 'Resolved').gte('updated_at', today.toISOString());
-      } else if (currentView === 'all-resolved-today') {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        query = query.eq('status', 'Resolved').gte('updated_at', today.toISOString());
-      }
-
-      // Apply topic filter
-      if (topicFilter !== 'All Topics') {
-        query = query.eq('issue_type', topicFilter);
-      }
-
-      // Apply status filter
-      if (statusFilter !== 'All') {
-        query = query.eq('status', statusFilter);
-      }
-
-      // Apply search
-      if (searchQuery) {
-        query = query.or(
-          `ticket_number.ilike.%${searchQuery}%,reseller_phone.ilike.%${searchQuery}%,order_id.ilike.%${searchQuery}%,reseller_name.ilike.%${searchQuery}%`
-        );
-      }
-
-      // Apply sorting
-      if (sortBy === 'unread') {
-          query = query.eq('unread_by_agent', true).order('latest_message_at', { ascending: false });
-        } else if (sortBy === 'newest') {
-          query = query.order('created_at', { ascending: false });
-        } else if (sortBy === 'oldest') {
-          query = query.order('created_at', { ascending: true });
-        } else if (sortBy === 'longest-wait') {
-          query = query.order('created_at', { ascending: true });
-        }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setTickets(data || []);
-      onTicketsLoad?.(data || []);
-    } catch (error) {
-      console.error('Error fetching tickets:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-      <select
-      onChange={(e) => {
-        const count = parseInt(e.target.value);
-        if (count === 0) {
-          setSelectedTickets(new Set());
-        } else if (count === -1) {
-          setSelectedTickets(new Set(tickets.map(t => t.id)));
-        } else {
-          setSelectedTickets(new Set(tickets.slice(0, count).map(t => t.id)));
-        }
-        e.target.value = '0';
-      }}
-      className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 hover:border-primary focus:border-primary focus:ring-2 focus:ring-blue-100 outline-none"
-    >
-      <option value="0">Select Tickets...</option>
-      <option value="20">Select 20</option>
-      <option value="30">Select 30</option>
-      <option value="50">Select 50</option>
-      <option value="-1">Select All ({tickets.length})</option>
-    </select>
 
   const handleTicketCheckbox = (ticketId: string) => {
     const newSelected = new Set(selectedTickets);
@@ -191,7 +157,6 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
 
         if (error) throw error;
         
-        // Create activity for each ticket
         const assignedTo = selectedAgent === 'unassign' ? null : agents.find(a => a.id === selectedAgent)?.full_name;
         let activityDetails = '';
         
@@ -210,54 +175,52 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
           details: activityDetails
         });
       }
-      
 
-      // Clear selection and refresh
       setSelectedTickets(new Set());
       setSelectedAgent('');
-      await fetchTickets();
+      toast.success(`${updates.length} tickets assigned`);
     } catch (error) {
       console.error('Error assigning tickets:', error);
+      toast.error('Failed to assign tickets');
     } finally {
       setAssigning(false);
     }
   };
-      const handleBulkResolve = async () => {
-        if (selectedTickets.size === 0) return;
 
-        setAssigning(true);
-        try {
-          for (const ticketId of Array.from(selectedTickets)) {
-            const { error } = await supabase
-              .from('tickets')
-              .update({ 
-                status: 'Resolved', 
-                resolved_by: profile.id,
-                updated_at: new Date().toISOString() 
-              })
-              .eq('id', ticketId);
+  const handleBulkResolve = async () => {
+    if (selectedTickets.size === 0) return;
 
-            if (error) throw error;
+    setAssigning(true);
+    try {
+      for (const ticketId of Array.from(selectedTickets)) {
+        const { error } = await supabase
+          .from('tickets')
+          .update({ 
+            status: 'Resolved', 
+            resolved_by: profile?.id,
+            updated_at: new Date().toISOString() 
+          })
+          .eq('id', ticketId);
 
-            // Create activity
-            await supabase.from('ticket_activities').insert({
-              ticket_id: ticketId,
-              activity_type: 'status_changed',
-              actor_name: profile?.full_name || 'Agent',
-              details: `${profile?.full_name} marked ticket as Resolved`
-            });
-          }
+        if (error) throw error;
 
-          setSelectedTickets(new Set());
-          await fetchTickets();
-          toast.success(`${selectedTickets.size} tickets resolved`);
-        } catch (error) {
-          console.error('Error resolving tickets:', error);
-          toast.error('Failed to resolve tickets');
-        } finally {
-          setAssigning(false);
-        }
-      };
+        await supabase.from('ticket_activities').insert({
+          ticket_id: ticketId,
+          activity_type: 'status_changed',
+          actor_name: profile?.full_name || 'Agent',
+          details: `${profile?.full_name} marked ticket as Resolved`
+        });
+      }
+
+      setSelectedTickets(new Set());
+      toast.success(`${selectedTickets.size} tickets resolved`);
+    } catch (error) {
+      console.error('Error resolving tickets:', error);
+      toast.error('Failed to resolve tickets');
+    } finally {
+      setAssigning(false);
+    }
+  };
       
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -280,6 +243,8 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
         return 'Oldest First';
       case 'longest-wait':
         return 'Longest Wait';
+      case 'unread':
+        return 'Unread Messages';
     }
   };
 
@@ -377,39 +342,38 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
         </div>
 
         {/* Bulk Actions */}
-          {tickets.length > 0 && (
-            <div className="space-y-2 pt-2 border-t border-gray-200">
-              <div className="flex items-center gap-2">
-                <select
-                  onChange={(e) => {
-                    const count = parseInt(e.target.value);
-                    if (count === 0) {
-                      setSelectedTickets(new Set());
-                    } else if (count === -1) {
-                      setSelectedTickets(new Set(tickets.map(t => t.id)));
-                    } else {
-                      setSelectedTickets(new Set(tickets.slice(0, count).map(t => t.id)));
-                    }
-                    e.target.value = '0';
-                  }}
-                  className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 hover:border-primary focus:border-primary focus:ring-2 focus:ring-blue-100 outline-none"
-                >
-                  <option value="0">Select Tickets...</option>
-                  <option value="0">Deselect All</option>
-                  <option value="20">Select 20</option>
-                  <option value="30">Select 30</option>
-                  <option value="50">Select 50</option>
-                  <option value="-1">Select All ({tickets.length})</option>
-                </select>
-              </div>
-            
+        {filteredTickets.length > 0 && (
+          <div className="space-y-2 pt-2 border-t border-gray-200">
+            <div className="flex items-center gap-2">
+              <select
+                onChange={(e) => {
+                  const count = parseInt(e.target.value);
+                  if (count === 0) {
+                    setSelectedTickets(new Set());
+                  } else if (count === -1) {
+                    setSelectedTickets(new Set(filteredTickets.map(t => t.id)));
+                  } else {
+                    setSelectedTickets(new Set(filteredTickets.slice(0, count).map(t => t.id)));
+                  }
+                  e.target.value = '0';
+                }}
+                className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 hover:border-primary focus:border-primary focus:ring-2 focus:ring-blue-100 outline-none"
+              >
+                <option value="0">Select Tickets...</option>
+                <option value="0">Deselect All</option>
+                <option value="20">Select 20</option>
+                <option value="30">Select 30</option>
+                <option value="50">Select 50</option>
+                <option value="-1">Select All ({filteredTickets.length})</option>
+              </select>
+            </div>
 
             {selectedTickets.size > 0 && (
               <div className="flex items-center gap-2">
                 <select
                   value={selectedAgent}
                   onChange={(e) => setSelectedAgent(e.target.value)}
-                  className="..."
+                  className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 hover:border-primary focus:border-primary focus:ring-2 focus:ring-blue-100 outline-none"
                 >
                   <option value="">Select Agent</option>
                   <option value="unassign">Unassign Tickets</option>
@@ -453,87 +417,87 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
       </div>
 
       {/* Ticket List */}
-        <div className="flex-1 overflow-y-auto divide-y divide-gray-200">
-          {loading ? (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-muted-foreground">Loading tickets...</p>
-            </div>
-          ) : tickets.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center p-6">
-              <FileText className="h-12 w-12 text-gray-400 mb-3" />
-              <p className="text-foreground font-medium">No tickets found</p>
-              <p className="text-sm text-muted-foreground mt-1">Try adjusting your filters</p>
-            </div>
-          ) : (
-            tickets.map((ticket) => (
-              <div
-                key={ticket.id}
-                className={`flex items-start gap-3 p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
-                  selectedTicketId === ticket.id ? 'bg-blue-50 border-l-4 border-primary' : ''
-                }`}
-                onClick={() => {
-                  onSelectTicket(ticket.id);
-                  onTicketOpen?.(ticket);
+      <div className="flex-1 overflow-y-auto divide-y divide-gray-200">
+        {loading ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-muted-foreground">Loading tickets...</p>
+          </div>
+        ) : filteredTickets.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center p-6">
+            <FileText className="h-12 w-12 text-gray-400 mb-3" />
+            <p className="text-foreground font-medium">No tickets found</p>
+            <p className="text-sm text-muted-foreground mt-1">Try adjusting your filters</p>
+          </div>
+        ) : (
+          filteredTickets.map((ticket) => (
+            <div
+              key={ticket.id}
+              className={`flex items-start gap-3 p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
+                selectedTicketId === ticket.id ? 'bg-blue-50 border-l-4 border-primary' : ''
+              }`}
+              onClick={() => {
+                onSelectTicket(ticket.id);
+                onTicketOpen?.(ticket);
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={selectedTickets.has(ticket.id)}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  handleTicketCheckbox(ticket.id);
                 }}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedTickets.has(ticket.id)}
-                  onChange={(e) => {
-                    e.stopPropagation();
-                    handleTicketCheckbox(ticket.id);
-                  }}
-                  className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer flex-shrink-0"
-                />
-                
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-primary flex-shrink-0" />
-                      <span className="text-sm font-semibold text-primary">{ticket.ticket_number}</span>
-                    </div>
-                    <span className={`status-badge ${getStatusColor(ticket.status)} flex-shrink-0`}>
-                      {ticket.status}
-                    </span>
+                className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer flex-shrink-0"
+              />
+              
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-primary flex-shrink-0" />
+                    <span className="text-sm font-semibold text-primary">{ticket.ticket_number}</span>
                   </div>
-
-                  <p className="font-medium text-gray-900 mb-1 truncate">{ticket.reseller_name}</p>
-
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex gap-4 text-xs text-gray-600">
-                      <span>Order: {ticket.order_id}</span>
-                    </div>
-                    {ticket.assigned_agent_id ? (
-                        <div className="h-6 w-6 rounded-full bg-primary text-white text-xs flex items-center justify-center flex-shrink-0">
-                          {getInitials(ticket.agent_profiles?.full_name || 'AG')}
-                        </div>
-                      ) : (
-                        <span className="text-xs text-gray-400">Unassigned</span>
-                      )}
-                  </div>
-
-                  <p className="text-xs text-gray-500 mb-1 line-clamp-2">
-                    {ticket.latest_message || ticket.description}
-                  </p>
-
-                  {ticket.unread_by_agent && ticket.latest_message_sender === 'reseller' && (
-                    <div className="flex items-center gap-1 mt-1">
-                      <span className="h-2 w-2 bg-blue-500 rounded-full animate-pulse"></span>
-                      <span className="text-xs text-blue-600 font-medium">New message</span>
-                    </div>
-                  )}
-
-                  <p className="text-xs text-gray-400">
-                    {ticket.latest_message_at 
-                      ? formatDistanceToNow(new Date(ticket.latest_message_at), { addSuffix: true })
-                      : formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true })
-                    }
-                  </p>
+                  <span className={`status-badge ${getStatusColor(ticket.status)} flex-shrink-0`}>
+                    {ticket.status}
+                  </span>
                 </div>
+
+                <p className="font-medium text-gray-900 mb-1 truncate">{ticket.reseller_name}</p>
+
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex gap-4 text-xs text-gray-600">
+                    <span>Order: {ticket.order_id}</span>
+                  </div>
+                  {ticket.assigned_agent_id ? (
+                    <div className="h-6 w-6 rounded-full bg-primary text-white text-xs flex items-center justify-center flex-shrink-0">
+                      {getInitials((ticket as any).agent_profiles?.full_name || 'AG')}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-400">Unassigned</span>
+                  )}
+                </div>
+
+                <p className="text-xs text-gray-500 mb-1 line-clamp-2">
+                  {ticket.latest_message || ticket.description}
+                </p>
+
+                {ticket.unread_by_agent && ticket.latest_message_sender === 'reseller' && (
+                  <div className="flex items-center gap-1 mt-1">
+                    <span className="h-2 w-2 bg-blue-500 rounded-full animate-pulse"></span>
+                    <span className="text-xs text-blue-600 font-medium">New message</span>
+                  </div>
+                )}
+
+                <p className="text-xs text-gray-400">
+                  {ticket.latest_message_at 
+                    ? formatDistanceToNow(new Date(ticket.latest_message_at), { addSuffix: true })
+                    : formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true })
+                  }
+                </p>
               </div>
-            ))
-          )}
-        </div>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 };

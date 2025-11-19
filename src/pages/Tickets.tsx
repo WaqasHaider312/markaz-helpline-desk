@@ -5,6 +5,7 @@ import TicketList from '@/components/tickets/TicketList';
 import ChatPanel from '@/components/tickets/ChatPanel';
 import InfoPanel from '@/components/tickets/InfoPanel';
 import { useKeyboardShortcuts } from '@/components/tickets/KeyboardShortcuts';
+import { TicketsProvider } from '@/contexts/TicketsContext';
 
 export type ViewType = 
   | 'my-open' 
@@ -35,50 +36,52 @@ const Tickets = () => {
   });
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      {/* Left Sidebar */}
-      <Sidebar currentView={currentView} onViewChange={setCurrentView} />
+    <TicketsProvider>
+      <div className="flex h-screen bg-background overflow-hidden">
+        {/* Left Sidebar */}
+        <Sidebar currentView={currentView} onViewChange={setCurrentView} />
 
-      {/* Middle Panel - Ticket List */}
-      <TicketList
-        currentView={currentView}
-        selectedTicketId={selectedTicketId}
-        onSelectTicket={setSelectedTicketId}
-        onTicketOpen={(ticket) => {
-          // Don't auto-switch if already in any resolved view
-          if (ticket.status === 'Resolved' && 
-              (currentView === 'my-resolved-today' || currentView === 'all-resolved-today')) {
-            return; // Stay in current resolved view
-          }
-          
-          // Auto-switch for other cases (but not for resolved tickets)
-          if (ticket.status !== 'Resolved' && !ticket.assigned_agent_id) {
-            setCurrentView('unassigned');
-          } else if (ticket.assigned_agent_id === profile?.id && ticket.status !== 'Resolved') {
-            setCurrentView('my-open');
-          } else if (ticket.status !== 'Resolved') {
-            setCurrentView('all-assigned');
-          }
-        }}
-        onTicketsLoad={(tickets) => setTicketsList(tickets)}
-      />
+        {/* Middle Panel - Ticket List */}
+        <TicketList
+          currentView={currentView}
+          selectedTicketId={selectedTicketId}
+          onSelectTicket={setSelectedTicketId}
+          onTicketOpen={(ticket) => {
+            // Don't auto-switch if already in any resolved view
+            if (ticket.status === 'Resolved' && 
+                (currentView === 'my-resolved-today' || currentView === 'all-resolved-today')) {
+              return; // Stay in current resolved view
+            }
+            
+            // Auto-switch for other cases (but not for resolved tickets)
+            if (ticket.status !== 'Resolved' && !ticket.assigned_agent_id) {
+              setCurrentView('unassigned');
+            } else if (ticket.assigned_agent_id === profile?.id && ticket.status !== 'Resolved') {
+              setCurrentView('my-open');
+            } else if (ticket.status !== 'Resolved') {
+              setCurrentView('all-assigned');
+            }
+          }}
+          onTicketsLoad={(tickets) => setTicketsList(tickets)}
+        />
 
-      {/* Right Panel - Chat */}
-      <ChatPanel
-        ticketId={selectedTicketId}
-        onToggleInfo={() => setShowInfo(!showInfo)}
-        showInfo={showInfo}
-      />
+        {/* Right Panel - Chat */}
+        <ChatPanel
+          ticketId={selectedTicketId}
+          onToggleInfo={() => setShowInfo(!showInfo)}
+          showInfo={showInfo}
+        />
 
-      {/* Far Right - Info Panel */}
-      {showInfo && (
-            <InfoPanel 
-              ticketId={selectedTicketId} 
-              onNextTicket={handleNextTicket}
-              onClose={() => setSelectedTicketId(null)}
-            />
-          )}
-    </div>
+        {/* Far Right - Info Panel */}
+        {showInfo && (
+          <InfoPanel 
+            ticketId={selectedTicketId} 
+            onNextTicket={handleNextTicket}
+            onClose={() => setSelectedTicketId(null)}
+          />
+        )}
+      </div>
+    </TicketsProvider>
   );
 };
 

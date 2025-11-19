@@ -3,6 +3,7 @@ import { supabase, Ticket } from '@/lib/supabase';
 import { Copy, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTickets } from '@/contexts/TicketsContext';
 import {
   Select,
   SelectContent,
@@ -25,6 +26,7 @@ interface AgentProfile {
 }
 
 const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
+  const { tickets } = useTickets();
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [agents, setAgents] = useState<AgentProfile[]>([]);
   const [updating, setUpdating] = useState(false);
@@ -34,12 +36,13 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
 
   useEffect(() => {
     if (ticketId) {
-      fetchTicket();
+      const currentTicket = tickets.find(t => t.id === ticketId);
+      setTicket(currentTicket || null);
       fetchAgents();
     }
-  }, [ticketId]);
+  }, [ticketId, tickets]);
 
-    const handleIssueTypeChange = async () => {
+  const handleIssueTypeChange = async () => {
     if (!ticketId || !newIssueType) return;
 
     setUpdating(true);
@@ -53,34 +56,11 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
 
       toast.success('Issue type updated');
       setIsEditingIssueType(false);
-      const updated = await fetchTicket();
-      if (updated) {
-        setTicket(updated);
-      }
     } catch (error) {
       console.error('Error updating issue type:', error);
       toast.error('Failed to update issue type');
     } finally {
       setUpdating(false);
-    }
-  };
-
-  const fetchTicket = async () => {
-    if (!ticketId) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('tickets')
-        .select('*')
-        .eq('id', ticketId)
-        .single();
-
-      if (error) throw error;
-      setTicket(data);
-      return data;
-    } catch (error) {
-      console.error('Error fetching ticket:', error);
-      return null;
     }
   };
 
@@ -114,8 +94,6 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
         .eq('id', ticketId);
 
       if (error) throw error;
-
-      setTicket(prev => prev ? { ...prev, status: newStatus } : null);
       
       // Create activity record
       let activityDetails = '';
@@ -141,8 +119,6 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
           onNextTicket?.();
         }, 500);
       }
-      
-      await fetchTicket();
     } catch (error) {
       console.error('Error updating status:', error);
       toast.error('Failed to update status');
@@ -152,19 +128,19 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
   };
 
   const handleAssignChange = async (agentId: string) => {
-  if (!ticketId) return;
+    if (!ticketId) return;
 
-  setUpdating(true);
-  try {
-    const { error } = await supabase
-      .from('tickets')
-      .update({ assigned_agent_id: agentId === 'unassigned' ? null : agentId })
-      .eq('id', ticketId);
+    setUpdating(true);
+    try {
+      const { error } = await supabase
+        .from('tickets')
+        .update({ assigned_agent_id: agentId === 'unassigned' ? null : agentId })
+        .eq('id', ticketId);
 
-    if (error) throw error;
+      if (error) throw error;
 
-    // Create activity record
-    const assignedTo = agentId === 'unassigned' ? null : agents.find(a => a.id === agentId)?.full_name;
+      // Create activity record
+      const assignedTo = agentId === 'unassigned' ? null : agents.find(a => a.id === agentId)?.full_name;
       let activityDetails = '';
 
       if (agentId === 'unassigned') {
@@ -183,7 +159,6 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
       });
 
       toast.success('Assignment updated');
-      await fetchTicket();
     } catch (error) {
       console.error('Error updating assignment:', error);
       toast.error('Failed to update assignment');
@@ -335,47 +310,47 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
           </div>
 
           <div>
-              <p className="text-xs text-gray-500 mb-1">Issue Type</p>
-              {isEditingIssueType ? (
-                <div className="space-y-2">
-                  <select
-                    value={newIssueType}
-                    onChange={(e) => setNewIssueType(e.target.value)}
-                    className="w-full text-sm border border-gray-300 rounded px-2 py-1"
-                  >
-                    <option value="">Select Type</option>
-                    <option value="Delivery Issues">Delivery Issues</option>
-                    <option value="Payment Issues">Payment Issues</option>
-                    <option value="Return Issues">Return Issues</option>
-                    <option value="App/OTP">App/OTP</option>
-                    <option value="Other">Other</option>
-                  </select>
-                  <div className="flex gap-1">
-                    <Button size="sm" onClick={handleIssueTypeChange} disabled={updating || !newIssueType}>
-                      Save
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setIsEditingIssueType(false)}>
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between">
-                  <p className="text-foreground">{ticket.issue_type}</p>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setIsEditingIssueType(true);
-                      setNewIssueType(ticket.issue_type);
-                    }}
-                    className="text-xs"
-                  >
-                    Edit
+            <p className="text-xs text-gray-500 mb-1">Issue Type</p>
+            {isEditingIssueType ? (
+              <div className="space-y-2">
+                <select
+                  value={newIssueType}
+                  onChange={(e) => setNewIssueType(e.target.value)}
+                  className="w-full text-sm border border-gray-300 rounded px-2 py-1"
+                >
+                  <option value="">Select Type</option>
+                  <option value="Delivery Issues">Delivery Issues</option>
+                  <option value="Payment Issues">Payment Issues</option>
+                  <option value="Return Issues">Return Issues</option>
+                  <option value="App/OTP">App/OTP</option>
+                  <option value="Other">Other</option>
+                </select>
+                <div className="flex gap-1">
+                  <Button size="sm" onClick={handleIssueTypeChange} disabled={updating || !newIssueType}>
+                    Save
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setIsEditingIssueType(false)}>
+                    Cancel
                   </Button>
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <p className="text-foreground">{ticket.issue_type}</p>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setIsEditingIssueType(true);
+                    setNewIssueType(ticket.issue_type);
+                  }}
+                  className="text-xs"
+                >
+                  Edit
+                </Button>
+              </div>
+            )}
+          </div>
 
           <div>
             <p className="text-xs text-gray-500 mb-1">Created</p>

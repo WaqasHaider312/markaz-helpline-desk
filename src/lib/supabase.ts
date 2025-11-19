@@ -22,6 +22,7 @@ export interface Ticket {
   created_at: string;
   updated_at: string;
   agent_profiles?: any;
+  resolved_by?: string | null;
 }
 
 export interface Message {
