@@ -525,107 +525,132 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
           </div>
         )}
 
-        {/* Messages and Notes */}
-        {messages.map((message) =>
-          message.sender_type === 'reseller' ? (
-            <div key={message.id} className="flex justify-start">
-              <div className="flex items-start gap-2 max-w-[70%]">
-                <div className="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center text-xs font-medium">
-                  {getInitials(message.sender_name)}
-                </div>
-                <div className="bg-gray-100 rounded-2xl rounded-tl-sm p-3">
-                  <p className="text-xs text-gray-600 mb-1">{message.sender_name}</p>
-                  <p className="text-sm text-gray-900 whitespace-pre-wrap">{message.message}</p>
-                  {message.attachment_url && (() => {
-                    const ext = message.attachment_url.toLowerCase().split('.').pop();
-                    
-                    if (ext === 'pdf') {
-                      return (
-                        <div
-                          onClick={() => window.open(message.attachment_url, '_blank')}
-                          className="flex items-center gap-2 p-3 bg-white bg-opacity-20 hover:bg-opacity-30 rounded cursor-pointer mt-2"
-                        >
-                          <FileText className="w-5 h-5 text-white" />
-                          <span className="text-xs">PDF</span>
-                        </div>
-                      );
-                    }
-                    
-                    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext || '')) {
-                      return (
+        {/* Messages, Activities, and Notes */}
+          {[
+            ...messages.map(m => ({...m, type: 'message'})), 
+            ...activities.map(a => ({...a, type: 'activity'})),
+            ...internalNotes.map(n => ({...n, type: 'note'}))
+          ]
+            .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+            .map((item) => {
+              // Activity
+              if (item.type === 'activity') {
+                return (
+                  <div key={item.id} className="flex justify-center my-4">
+                    <div className="bg-gray-200 text-gray-700 px-4 py-2 rounded-full text-xs max-w-xs text-center">
+                      {item.details}
+                    </div>
+                  </div>
+                );
+              }
+              
+              // Internal Note
+              if (item.type === 'note') {
+                return (
+                  <div key={item.id} className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-lg">🔒</span>
+                      <span className="bg-yellow-200 text-yellow-800 text-xs px-2 py-1 rounded">
+                        Internal Note
+                      </span>
+                      <span className="text-sm font-medium">{item.agent_name}</span>
+                    </div>
+                    <p className="text-gray-700 italic">{item.note_text}</p>
+                    <p className="text-xs text-gray-500 mt-2">
+                      {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}
+                    </p>
+                  </div>
+                );
+              }
+              
+              // Message from reseller
+              if (item.sender_type === 'reseller') {
+                return (
+                  <div key={item.id} className="flex justify-start">
+                    <div className="flex items-start gap-2 max-w-[70%]">
+                      <div className="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center text-xs font-medium">
+                        {getInitials(item.sender_name)}
+                      </div>
+                      <div className="bg-gray-100 rounded-2xl rounded-tl-sm p-3">
+                        <p className="text-xs text-gray-600 mb-1">{item.sender_name}</p>
+                        <p className="text-sm text-gray-900 whitespace-pre-wrap">{item.message}</p>
+                        {item.attachment_url && (() => {
+                          const ext = item.attachment_url.toLowerCase().split('.').pop();
+                          
+                          if (ext === 'pdf') {
+                            return (
+                              <div
+                                onClick={() => window.open(item.attachment_url, '_blank')}
+                                className="flex items-center gap-2 p-3 bg-white bg-opacity-20 hover:bg-opacity-30 rounded cursor-pointer mt-2"
+                              >
+                                <FileText className="w-5 h-5 text-red-600" />
+                                <span className="text-xs text-gray-700">PDF</span>
+                              </div>
+                            );
+                          }
+                          
+                          if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext || '')) {
+                            return (
+                              <img
+                                src={item.attachment_url}
+                                alt="Attachment"
+                                className="mt-2 rounded-lg max-h-60 cursor-pointer hover:opacity-80"
+                                onClick={() => setMediaViewer({ url: item.attachment_url, type: 'image' })}
+                              />
+                            );
+                          }
+                          
+                          if (ext === 'mp4') {
+                            return (
+                              <div 
+                                className="mt-2 cursor-pointer relative group"
+                                onClick={() => setMediaViewer({ url: item.attachment_url, type: 'video' })}
+                              >
+                                <video src={item.attachment_url} className="rounded-lg max-h-60 w-full" />
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
+                                  <span className="text-white text-xs bg-black/50 px-2 py-1 rounded">Click to view</span>
+                                </div>
+                              </div>
+                            );
+                          }
+                          
+                          return null;
+                        })()}
+                        <p className="text-xs text-gray-500 mt-1">
+                          {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              
+              // Message from agent
+              return (
+                <div key={item.id} className="flex justify-end">
+                  <div className="flex items-start gap-2 max-w-[70%]">
+                    <div className="bg-primary rounded-2xl rounded-tr-sm p-3">
+                      <p className="text-xs text-blue-100 mb-1">{item.sender_name}</p>
+                      <p className="text-sm text-white whitespace-pre-wrap">{item.message}</p>
+                      {item.attachment_url && (
                         <img
-                          src={message.attachment_url}
+                          src={item.attachment_url}
                           alt="Attachment"
                           className="mt-2 rounded-lg max-h-60 cursor-pointer hover:opacity-80"
-                          onClick={() => setMediaViewer({ url: message.attachment_url, type: 'image' })}
+                          onClick={() => window.open(item.attachment_url, '_blank')}
                         />
-                      );
-                    }
-                    
-                    if (ext === 'mp4') {
-                      return (
-                        <div 
-                          className="mt-2 cursor-pointer relative group"
-                          onClick={() => setMediaViewer({ url: message.attachment_url, type: 'video' })}
-                        >
-                          <video src={message.attachment_url} className="rounded-lg max-h-60 w-full" />
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
-                            <span className="text-white text-xs bg-black/50 px-2 py-1 rounded">Click to view</span>
-                          </div>
-                        </div>
-                      );
-                    }
-                    
-                    return null;
-                  })()}
-                  <p className="text-xs text-gray-500 mt-1">
-                    {formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}
-                  </p>
+                      )}
+                      <p className="text-xs text-blue-100 mt-1">
+                        {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}
+                      </p>
+                    </div>
+                    <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-xs font-medium text-white">
+                      {getInitials(item.sender_name)}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          ) : (
-            <div key={message.id} className="flex justify-end">
-              <div className="flex items-start gap-2 max-w-[70%]">
-                <div className="bg-primary rounded-2xl rounded-tr-sm p-3">
-                  <p className="text-xs text-blue-100 mb-1">{message.sender_name}</p>
-                  <p className="text-sm text-white whitespace-pre-wrap">{message.message}</p>
-                  {message.attachment_url && (
-                    <img
-                      src={message.attachment_url}
-                      alt="Attachment"
-                      className="mt-2 rounded-lg max-h-60 cursor-pointer hover:opacity-80"
-                      onClick={() => window.open(message.attachment_url, '_blank')}
-                    />
-                  )}
-                  <p className="text-xs text-blue-100 mt-1">
-                    {formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}
-                  </p>
-                </div>
-                <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-xs font-medium text-white">
-                  {getInitials(message.sender_name)}
-                </div>
-              </div>
-            </div>
-          )
-        )}
-
-        {/* Internal Notes */}
-        {internalNotes.map((note) => (
-          <div key={note.id} className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-lg">🔒</span>
-              <span className="bg-yellow-200 text-yellow-800 text-xs px-2 py-1 rounded">
-                Internal Note
-              </span>
-              <span className="text-sm font-medium">{note.agent_name}</span>
-            </div>
-            <p className="text-gray-700 italic">{note.note_text}</p>
-            <p className="text-xs text-gray-500 mt-2">
-              {formatDistanceToNow(new Date(note.created_at), { addSuffix: true })}
-            </p>
-          </div>
-        ))}
+              );
+            })}
 
         <div ref={messagesEndRef} />
       </div>
