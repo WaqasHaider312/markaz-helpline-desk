@@ -35,6 +35,7 @@ const CannedMessages = () => {
   const [title, setTitle] = useState('');
   const [messageText, setMessageText] = useState('');
   const [saving, setSaving] = useState(false);
+  const [shortcutName, setShortcutName] = useState('');
 
   useEffect(() => {
     fetchMessages();
@@ -231,6 +232,13 @@ const CannedMessages = () => {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 maxLength={100}
+              />
+
+              <Input
+                placeholder="Shortcut (e.g., /aoa, /refund)"
+                value={shortcutName}
+                onChange={(e) => setShortcutName(e.target.value)}
+                maxLength={20}
               />
             </div>
             <div>

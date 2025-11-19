@@ -18,6 +18,7 @@ interface ChatPanelProps {
 interface CannedMessage {
   id: string;
   message_text: string;
+    shortcut_name?: string;
 }
 
 const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
@@ -39,6 +40,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   const [agents, setAgents] = useState<any[]>([]);
   const [selectedAgentForAssign, setSelectedAgentForAssign] = useState('');
   const [activities, setActivities] = useState<any[]>([]);
+  const [filteredCannedMessages, setFilteredCannedMessages] = useState<CannedMessage[]>([]);
   const [mediaViewer, setMediaViewer] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
   useEffect(() => {
     if (ticketId) {
@@ -155,8 +157,10 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   };
 
   const subscribeToUpdates = () => {
-    const messagesChannel = supabase
-      .channel('ticket-messages')
+    const channelName = `ticket-${ticketId}`;
+    
+    const channel = supabase
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -166,13 +170,13 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
           filter: `ticket_id=eq.${ticketId}`,
         },
         (payload) => {
-          setMessages((prev) => [...prev, payload.new as Message]);
+          setMessages((prev) => {
+            // Prevent duplicates
+            if (prev.find(m => m.id === payload.new.id)) return prev;
+            return [...prev, payload.new as Message];
+          });
         }
       )
-      .subscribe();
-
-    const notesChannel = supabase
-      .channel('ticket-notes')
       .on(
         'postgres_changes',
         {
@@ -182,13 +186,12 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
           filter: `ticket_id=eq.${ticketId}`,
         },
         (payload) => {
-          setInternalNotes((prev) => [...prev, payload.new as InternalNote]);
+          setInternalNotes((prev) => {
+            if (prev.find(n => n.id === payload.new.id)) return prev;
+            return [...prev, payload.new as InternalNote];
+          });
         }
       )
-      .subscribe();
-
-    const activitiesChannel = supabase
-      .channel('ticket-activities')
       .on(
         'postgres_changes',
         {
@@ -198,15 +201,16 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
           filter: `ticket_id=eq.${ticketId}`,
         },
         (payload) => {
-          setActivities((prev) => [...prev, payload.new]);
+          setActivities((prev) => {
+            if (prev.find(a => a.id === payload.new.id)) return prev;
+            return [...prev, payload.new];
+          });
         }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(messagesChannel);
-      supabase.removeChannel(notesChannel);
-      supabase.removeChannel(activitiesChannel);
+      supabase.removeChannel(channel);
     };
   };
 
@@ -391,16 +395,24 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   };
 
   const handleReplyTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value;
-    setReplyText(value);
+        const value = e.target.value;
+        setReplyText(value);
 
-    // Show canned messages if user types "/"
-    if (value.endsWith('/')) {
-      setShowCannedMessages(true);
-    } else if (!value.includes('/')) {
-      setShowCannedMessages(false);
-    }
-  };
+        // Extract what user typed after /
+        const match = value.match(/\/(\w*)$/);
+        if (match) {
+          const searchTerm = match[1].toLowerCase();
+          setShowCannedMessages(true);
+          
+          // Filter canned messages by shortcut
+          const filtered = cannedMessages.filter(msg => 
+            msg.shortcut_name?.toLowerCase().includes(searchTerm)
+          );
+          setFilteredCannedMessages(filtered);
+        } else {
+          setShowCannedMessages(false);
+        }
+      };
 
   const getInitials = (name: string) => {
     return name
