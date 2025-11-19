@@ -103,6 +103,7 @@ const CannedMessages = () => {
             agent_id: profile.id,
             title: title.trim(),
             message_text: messageText.trim(),
+            shortcut_name: shortcutName.trim(),
           });
 
         if (error) throw error;
@@ -233,14 +234,18 @@ const CannedMessages = () => {
                 onChange={(e) => setTitle(e.target.value)}
                 maxLength={100}
               />
-
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium mb-2 block">Shortcut</label>
               <Input
-                placeholder="Shortcut (e.g., /aoa, /refund)"
+                placeholder="e.g., /aoa, /refund"
                 value={shortcutName}
                 onChange={(e) => setShortcutName(e.target.value)}
                 maxLength={20}
               />
             </div>
+            
             <div>
               <label className="text-sm font-medium mb-2 block">Message</label>
               <Textarea
