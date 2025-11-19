@@ -748,7 +748,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                     onChange={handleReplyTextChange}
                     rows={1}
                     className="flex-1 resize-none min-h-[40px] max-h-[200px] rounded-lg border-gray-300"
-                    maxLength={500}
+                    maxLength={800}
                     style={{ height: 'auto', minHeight: '40px', maxHeight: '200px' }}
                     onInput={(e) => {
                       const target = e.target as HTMLTextAreaElement;
@@ -773,7 +773,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
 
               {/* Info Row */}
               <div className="flex justify-between items-center mt-2 text-xs text-gray-400">
-                <span>{replyText.length}/500</span>
+                <span>{replyText.length}/800</span>
                 <span>Use / to show quick replies</span>
               </div>
             </>
@@ -818,7 +818,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                   onChange={(e) => setNoteText(e.target.value)}
                   rows={1}
                   className="flex-1 resize-none min-h-[40px] max-h-[200px] rounded-lg bg-yellow-50 border-yellow-300"
-                  maxLength={500}
+                  maxLength={800}
                   style={{ height: 'auto', minHeight: '40px', maxHeight: '200px' }}
                   onInput={(e) => {
                     const target = e.target as HTMLTextAreaElement;
@@ -844,7 +844,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
               {/* Info Row */}
               <div className="flex justify-between items-center mt-2 text-xs text-gray-400">
                 <span>🔒 Only visible to agents</span>
-                <span>{noteText.length}/500</span>
+                <span>{noteText.length}/800</span>
               </div>
             </>
           )}
