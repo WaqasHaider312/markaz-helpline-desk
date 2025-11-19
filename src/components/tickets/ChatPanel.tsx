@@ -43,12 +43,16 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   const [filteredCannedMessages, setFilteredCannedMessages] = useState<CannedMessage[]>([]);
   const [mediaViewer, setMediaViewer] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
   useEffect(() => {
-    if (ticketId) {
-      fetchTicketData();
-      fetchCannedMessages();
-      subscribeToUpdates();
-    }
-  }, [ticketId]);
+  if (ticketId) {
+    fetchTicketData();
+    fetchCannedMessages();
+    const unsubscribe = subscribeToUpdates();
+    
+    return () => {
+      unsubscribe();
+    };
+  }
+}, [ticketId]);
 
   useEffect(() => {
     scrollToBottom();
@@ -157,62 +161,61 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   };
 
   const subscribeToUpdates = () => {
-    const channelName = `ticket-${ticketId}`;
-    
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `ticket_id=eq.${ticketId}`,
-        },
-        (payload) => {
-          setMessages((prev) => {
-            // Prevent duplicates
-            if (prev.find(m => m.id === payload.new.id)) return prev;
-            return [...prev, payload.new as Message];
-          });
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'internal_notes',
-          filter: `ticket_id=eq.${ticketId}`,
-        },
-        (payload) => {
-          setInternalNotes((prev) => {
-            if (prev.find(n => n.id === payload.new.id)) return prev;
-            return [...prev, payload.new as InternalNote];
-          });
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'ticket_activities',
-          filter: `ticket_id=eq.${ticketId}`,
-        },
-        (payload) => {
-          setActivities((prev) => {
-            if (prev.find(a => a.id === payload.new.id)) return prev;
-            return [...prev, payload.new];
-          });
-        }
-      )
-      .subscribe();
+      const channelName = `ticket-${ticketId}-${Date.now()}`;
+      
+      const channel = supabase
+        .channel(channelName)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `ticket_id=eq.${ticketId}`,
+          },
+          (payload) => {
+            setMessages((prev) => {
+              if (prev.find(m => m.id === payload.new.id)) return prev;
+              return [...prev, payload.new as Message];
+            });
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'internal_notes',
+            filter: `ticket_id=eq.${ticketId}`,
+          },
+          (payload) => {
+            setInternalNotes((prev) => {
+              if (prev.find(n => n.id === payload.new.id)) return prev;
+              return [...prev, payload.new as InternalNote];
+            });
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'ticket_activities',
+            filter: `ticket_id=eq.${ticketId}`,
+          },
+          (payload) => {
+            setActivities((prev) => {
+              if (prev.find(a => a.id === payload.new.id)) return prev;
+              return [...prev, payload.new];
+            });
+          }
+        )
+        .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
+      return () => {
+        supabase.removeChannel(channel);
+      };
     };
-  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -726,19 +729,24 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
               )}
 
               {/* Canned Messages Dropdown */}
-              {showCannedMessages && cannedMessages.length > 0 && (
-                <div className="absolute bottom-full left-4 right-4 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto z-20">
-                  {cannedMessages.map((msg) => (
-                    <button
-                      key={msg.id}
-                      onClick={() => handleCannedMessageSelect(msg.message_text)}
-                      className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm border-b last:border-b-0"
-                    >
-                      {msg.message_text.slice(0, 60)}...
-                    </button>
-                  ))}
-                </div>
-              )}
+              {showCannedMessages && filteredCannedMessages.length > 0 && (
+              <div className="absolute bottom-full left-4 right-4 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto z-20">
+                {filteredCannedMessages.map((msg) => (
+                  <button
+                    key={msg.id}
+                    onClick={() => handleCannedMessageSelect(msg.message_text)}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm border-b last:border-b-0"
+                  >
+                    <div className="font-semibold text-xs text-gray-700 mb-1">
+                      {msg.shortcut_name || 'No shortcut'}
+                    </div>
+                    <div className="text-gray-600 text-xs">
+                      {msg.message_text.slice(0, 50)}...
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
 
               {/* Input Row */}
               <div className="flex items-center gap-2">
