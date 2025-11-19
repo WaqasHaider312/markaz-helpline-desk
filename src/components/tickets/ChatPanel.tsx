@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { MediaViewer } from './MediaViewer';
 import { FileText } from 'lucide-react';
 import { useKeyboardShortcuts } from './KeyboardShortcuts';
-let activeChannel: any = null;
+
 interface ChatPanelProps {
   ticketId: string | null;
   onToggleInfo: () => void;
@@ -37,6 +37,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   const [cannedMessages, setCannedMessages] = useState<CannedMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const channelRef = useRef<any>(null);
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [agents, setAgents] = useState<any[]>([]);
   const [selectedAgentForAssign, setSelectedAgentForAssign] = useState('');
@@ -161,41 +162,41 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
     }
   };
 
-  const subscribeToUpdates = () => {
-      // Remove any existing channel first
-      if (activeChannel) {
-        supabase.removeChannel(activeChannel);
-        activeChannel = null;
+ const subscribeToUpdates = () => {
+  // Cleanup previous channel
+  if (channelRef.current) {
+    supabase.removeChannel(channelRef.current);
+    channelRef.current = null;
+  }
+
+  const channel = supabase
+    .channel(`ticket-${ticketId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `ticket_id=eq.${ticketId}`,
+      },
+      (payload) => {
+        setMessages((prev) => {
+          if (prev.find(m => m.id === payload.new.id)) return prev;
+          return [...prev, payload.new as Message];
+        });
       }
+    )
+    .subscribe();
 
-      const channelName = `ticket-${ticketId}-${Math.random()}`;
-      
-      activeChannel = supabase
-        .channel(channelName)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'messages',
-            filter: `ticket_id=eq.${ticketId}`,
-          },
-          (payload) => {
-            setMessages((prev) => {
-              if (prev.find(m => m.id === payload.new.id)) return prev;
-              return [...prev, payload.new as Message];
-            });
-          }
-        )
-        .subscribe();
+  channelRef.current = channel;
 
-      return () => {
-        if (activeChannel) {
-          supabase.removeChannel(activeChannel);
-          activeChannel = null;
-        }
-      };
-    };
+  return () => {
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+  };
+};
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -282,7 +283,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
 
           if (error) throw error;
 
-          setMessages((prev) => [...prev, data]);
+         // Let realtime subscription add the message
 
           // Update latest message in ticket
           await supabase
@@ -295,8 +296,9 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
             })
             .eq('id', ticketId);
 
-          setMessages((prev) => [...prev, data]);
+            // Let realtime subscription add the message
 
+            
           // Auto-assign + update status
             const updates: any = { updated_at: new Date().toISOString() };
             if (ticket?.status === 'Pending') {
