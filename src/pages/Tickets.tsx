@@ -4,7 +4,7 @@ import Sidebar from '@/components/tickets/Sidebar';
 import TicketList from '@/components/tickets/TicketList';
 import ChatPanel from '@/components/tickets/ChatPanel';
 import InfoPanel from '@/components/tickets/InfoPanel';
-// import { useKeyboardShortcuts } from '@/components/tickets/KeyboardShortcuts';
+import { useKeyboardShortcuts } from '@/components/tickets/KeyboardShortcuts';
 
 export type ViewType = 
   | 'my-open' 
@@ -29,10 +29,10 @@ const Tickets = () => {
     setSelectedTicketId(ticketsList[nextIndex].id);
   };
 
-  // useKeyboardShortcuts({
-  //   onCloseTicket: () => setSelectedTicketId(null),
-  //   onNextTicket: handleNextTicket
-  // });
+  useKeyboardShortcuts({
+    onCloseTicket: () => setSelectedTicketId(null),
+    onNextTicket: handleNextTicket
+  });
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
@@ -45,14 +45,18 @@ const Tickets = () => {
         selectedTicketId={selectedTicketId}
         onSelectTicket={setSelectedTicketId}
         onTicketOpen={(ticket) => {
-          // Auto-switch view based on ticket
-          if (!ticket.assigned_agent_id) {
+          // Don't auto-switch if already in any resolved view
+          if (ticket.status === 'Resolved' && 
+              (currentView === 'my-resolved-today' || currentView === 'all-resolved-today')) {
+            return; // Stay in current resolved view
+          }
+          
+          // Auto-switch for other cases (but not for resolved tickets)
+          if (ticket.status !== 'Resolved' && !ticket.assigned_agent_id) {
             setCurrentView('unassigned');
           } else if (ticket.assigned_agent_id === profile?.id && ticket.status !== 'Resolved') {
             setCurrentView('my-open');
-          } else if (ticket.status === 'Resolved') {
-            setCurrentView('all-resolved-today');
-          } else {
+          } else if (ticket.status !== 'Resolved') {
             setCurrentView('all-assigned');
           }
         }}

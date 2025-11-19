@@ -68,7 +68,8 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
       const { count: allUnresolved } = await supabase
         .from('tickets')
         .select('*', { count: 'exact', head: true })
-        .in('status', ['Pending', 'In Progress']);
+        .in('status', ['Pending', 'In Progress'])
+        .not('assigned_agent_id', 'is', null);
 
       // Unassigned (no agent assigned)
       const { count: unassigned } = await supabase
@@ -87,7 +88,7 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
       const { count: myResolvedToday } = await supabase
         .from('tickets')
         .select('*', { count: 'exact', head: true })
-        .eq('assigned_agent_id', profile.id)
+        .eq('resolved_by', profile.id)
         .eq('status', 'Resolved')
         .gte('updated_at', today.toISOString());
 
