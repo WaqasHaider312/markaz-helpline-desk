@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { MediaViewer } from './MediaViewer';
 import { FileText } from 'lucide-react';
 import { useKeyboardShortcuts } from './KeyboardShortcuts';
+let activeChannel: any = null;
 interface ChatPanelProps {
   ticketId: string | null;
   onToggleInfo: () => void;
@@ -161,9 +162,15 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   };
 
   const subscribeToUpdates = () => {
-      const channelName = `ticket-${ticketId}-${Date.now()}`;
+      // Remove any existing channel first
+      if (activeChannel) {
+        supabase.removeChannel(activeChannel);
+        activeChannel = null;
+      }
+
+      const channelName = `ticket-${ticketId}-${Math.random()}`;
       
-      const channel = supabase
+      activeChannel = supabase
         .channel(channelName)
         .on(
           'postgres_changes',
@@ -180,40 +187,13 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
             });
           }
         )
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'internal_notes',
-            filter: `ticket_id=eq.${ticketId}`,
-          },
-          (payload) => {
-            setInternalNotes((prev) => {
-              if (prev.find(n => n.id === payload.new.id)) return prev;
-              return [...prev, payload.new as InternalNote];
-            });
-          }
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'ticket_activities',
-            filter: `ticket_id=eq.${ticketId}`,
-          },
-          (payload) => {
-            setActivities((prev) => {
-              if (prev.find(a => a.id === payload.new.id)) return prev;
-              return [...prev, payload.new];
-            });
-          }
-        )
         .subscribe();
 
       return () => {
-        supabase.removeChannel(channel);
+        if (activeChannel) {
+          supabase.removeChannel(activeChannel);
+          activeChannel = null;
+        }
       };
     };
 
@@ -398,24 +378,28 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   };
 
   const handleReplyTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        const value = e.target.value;
-        setReplyText(value);
+      const value = e.target.value;
+      setReplyText(value);
 
-        // Extract what user typed after /
-        const match = value.match(/\/(\w*)$/);
-        if (match) {
-          const searchTerm = match[1].toLowerCase();
-          setShowCannedMessages(true);
-          
-          // Filter canned messages by shortcut
+      const match = value.match(/\/(\w*)$/);
+      if (match) {
+        const searchTerm = match[1].toLowerCase();
+        setShowCannedMessages(true);
+        
+        if (searchTerm === '') {
+          // Show all if just typed /
+          setFilteredCannedMessages(cannedMessages);
+        } else {
+          // Filter by shortcut
           const filtered = cannedMessages.filter(msg => 
             msg.shortcut_name?.toLowerCase().includes(searchTerm)
           );
           setFilteredCannedMessages(filtered);
-        } else {
-          setShowCannedMessages(false);
         }
-      };
+      } else {
+        setShowCannedMessages(false);
+      }
+    };
 
   const getInitials = (name: string) => {
     return name
