@@ -9,7 +9,6 @@ import { TicketsProvider } from '@/contexts/TicketsContext';
 
 export type ViewType = 
   | 'my-open' 
-  | 'all-unresolved' 
   | 'unassigned' 
   | 'all-assigned' 
   | 'my-resolved-today' 

@@ -26,9 +26,9 @@ export const TicketsProvider = ({ children }: { children: ReactNode }) => {
     if (!profile) return;
 
     const { data } = await supabase
-      .from('tickets')
-      .select('*')
-      .order('created_at', { ascending: false });
+        .from('tickets')
+        .select('*, agent_profiles!assigned_agent_id(full_name)')
+        .order('created_at', { ascending: false });
 
     setTickets(data || []);
   };
@@ -45,15 +45,15 @@ export const TicketsProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const channel = supabase
-      .channel('all-tickets')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tickets' },
-        () => {
-          refreshTickets();
-        }
-      )
-      .subscribe();
+        .channel('all-tickets')
+        .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'tickets' },  // Change INSERT to *
+            () => {
+            refreshTickets();
+            }
+        )
+        .subscribe();
 
     channelRef.current = channel;
 
