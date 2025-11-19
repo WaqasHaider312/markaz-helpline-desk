@@ -75,7 +75,8 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
       const { count: unassigned } = await supabase
         .from('tickets')
         .select('*', { count: 'exact', head: true })
-        .is('assigned_agent_id', null);
+        .is('assigned_agent_id', null)
+        .neq('status', 'Resolved');
 
       // All Assigned (assigned to anyone, not resolved)
       const { count: allAssigned } = await supabase
