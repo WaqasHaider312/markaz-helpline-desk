@@ -100,9 +100,14 @@ const InfoPanel = ({ ticketId, onNextTicket }: InfoPanelProps) => {
 
     setUpdating(true);
     try {
+      const updates: any = { status: newStatus };
+      if (newStatus === 'Resolved') {
+        updates.resolved_by = profile?.id;
+      }
+
       const { error } = await supabase
         .from('tickets')
-        .update({ status: newStatus })
+        .update(updates)
         .eq('id', ticketId);
 
       if (error) throw error;

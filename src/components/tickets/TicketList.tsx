@@ -82,7 +82,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
       if (currentView === 'my-open') {
         query = query.eq('assigned_agent_id', profile.id).neq('status', 'Resolved');
       } else if (currentView === 'all-unresolved') {
-        query = query.in('status', ['Pending', 'In Progress']);
+        query = query.in('status', ['Pending', 'In Progress']).not('assigned_agent_id', 'is', null);
       }  else if (currentView === 'unassigned') {
           query = query.is('assigned_agent_id', null).neq('status', 'Resolved');
         
@@ -91,7 +91,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
       } else if (currentView === 'my-resolved-today') {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        query = query.eq('assigned_agent_id', profile.id).eq('status', 'Resolved').gte('updated_at', today.toISOString());
+        query = query.eq('resolved_by', profile.id).eq('status', 'Resolved').gte('updated_at', today.toISOString());
       } else if (currentView === 'all-resolved-today') {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -209,7 +209,11 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
           for (const ticketId of Array.from(selectedTickets)) {
             const { error } = await supabase
               .from('tickets')
-              .update({ status: 'Resolved', updated_at: new Date().toISOString() })
+              .update({ 
+                status: 'Resolved', 
+                resolved_by: profile.id,
+                updated_at: new Date().toISOString() 
+              })
               .eq('id', ticketId);
 
             if (error) throw error;
