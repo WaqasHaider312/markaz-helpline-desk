@@ -28,25 +28,30 @@ const linkifyText = (text: string) => {
   const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/g;
   const parts = text.split(urlRegex);
   
-  return parts.map((part, index) => {
-    if (part.match(urlRegex)) {
-      const url = part.startsWith('http') ? part : `https://${part}`;
-      return (
-        
-          key={index}
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-blue-500 hover:text-blue-600 underline"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {part}
-        </a>
-      );
-    }
-    return part;
-  });
+  return (
+    <>
+      {parts.map((part, index) => {
+        if (part.match(urlRegex)) {
+          const url = part.startsWith('http') ? part : `https://${part}`;
+          return (
+            
+              key={index}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-500 hover:text-blue-600 underline break-all"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {part}
+            </a>
+          );
+        }
+        return part;
+      })}
+    </>
+  );
 };
+
 
 const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   const { profile } = useAuth();
