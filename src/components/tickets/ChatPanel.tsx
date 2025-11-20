@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTickets } from '@/contexts/TicketsContext';
 import { supabase, Ticket, Message, InternalNote } from '@/lib/supabase';
-import { MessageCircle, ChevronRight, Paperclip, X, Loader2 } from 'lucide-react';
+import { MessageCircle, ChevronRight, Paperclip, X, Loader2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { formatDistanceToNow } from 'date-fns';
@@ -23,8 +23,34 @@ interface CannedMessage {
   shortcut_name?: string;
 }
 
+// Utility function to make links clickable
+const linkifyText = (text: string) => {
+  const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  
+  return parts.map((part, index) => {
+    if (part.match(urlRegex)) {
+      const url = part.startsWith('http') ? part : `https://${part}`;
+      return (
+        
+          key={index}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-500 hover:text-blue-600 underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {part}
+        </a>
+      );
+    }
+    return part;
+  });
+};
+
 const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   const { profile } = useAuth();
+  const { tickets, refreshTickets } = useTickets();
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [internalNotes, setInternalNotes] = useState<InternalNote[]>([]);
@@ -45,15 +71,13 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   const [activities, setActivities] = useState<any[]>([]);
   const [filteredCannedMessages, setFilteredCannedMessages] = useState<CannedMessage[]>([]);
   const [mediaViewer, setMediaViewer] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
-  const { tickets, refreshTickets } = useTickets();
+  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     if (ticketId) {
-      // Get ticket from context
       const currentTicket = tickets.find(t => t.id === ticketId);
       setTicket(currentTicket || null);
       
-      // Fetch messages, notes, activities
       fetchTicketData();
       fetchCannedMessages();
       const unsubscribe = subscribeToUpdates();
@@ -163,7 +187,6 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   };
 
   const subscribeToUpdates = () => {
-    // Cleanup previous channel
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
       channelRef.current = null;
@@ -202,10 +225,15 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Handle file selection from input
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    validateAndSetFile(file);
+  };
 
+  // Validate and set file as attachment
+  const validateAndSetFile = (file: File) => {
     if (file.size > 5 * 1024 * 1024) {
       toast.error('File too large. Max 5MB.');
       return;
@@ -218,6 +246,48 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
     }
 
     setAttachment(file);
+  };
+
+  // Handle paste event for screenshot
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const blob = items[i].getAsFile();
+        if (blob) {
+          e.preventDefault();
+          validateAndSetFile(blob);
+          toast.success('Screenshot pasted!');
+          return;
+        }
+      }
+    }
+  };
+
+  // Handle drag & drop
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) {
+      validateAndSetFile(files[0]);
+    }
   };
 
   const removeAttachment = () => {
@@ -283,9 +353,6 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
 
       if (error) throw error;
 
-      // Let realtime subscription add the message
-
-      // Update latest message in ticket
       await supabase
         .from('tickets')
         .update({
@@ -296,7 +363,6 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
         })
         .eq('id', ticketId);
 
-      // Auto-assign + update status
       const updates: any = { updated_at: new Date().toISOString() };
       if (ticket?.status === 'Pending') {
         updates.status = 'In Progress';
@@ -312,10 +378,9 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
 
         if (!updateError) {
           setTicket(prev => prev ? {...prev, ...updates} : null);
-          await refreshTickets(); // ✅ Add this line
+          await refreshTickets();
         }
         
-        // Create activity if auto-assigned
         if (updates.assigned_agent_id) {
           await supabase.from('ticket_activities').insert({
             ticket_id: ticketId,
@@ -358,7 +423,6 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
 
       if (error) throw error;
 
-      // Add note to state immediately
       setInternalNotes((prev) => [...prev, data]);
 
       setNoteText('');
@@ -386,10 +450,8 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
       setShowCannedMessages(true);
       
       if (searchTerm === '') {
-        // Show all if just typed /
         setFilteredCannedMessages(cannedMessages);
       } else {
-        // Filter by shortcut
         const filtered = cannedMessages.filter(msg => 
           msg.shortcut_name?.toLowerCase().includes(searchTerm)
         );
@@ -420,6 +482,16 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
 
   return (
     <div className="flex-1 flex flex-col bg-white relative">
+      {/* Drag & Drop Overlay */}
+      {isDragging && (
+        <div className="absolute inset-0 z-50 bg-primary/10 border-4 border-dashed border-primary flex items-center justify-center">
+          <div className="text-center">
+            <Upload className="h-16 w-16 text-primary mx-auto mb-4" />
+            <p className="text-xl font-semibold text-primary">Drop file here</p>
+          </div>
+        </div>
+      )}
+
       {/* Top Bar */}
       <div className="sticky top-0 p-4 border-b border-gray-200 bg-white z-10">
         <div className="flex items-center justify-between">
@@ -451,8 +523,8 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                 <span className="font-medium">Issue Type:</span> {ticket.issue_type}
               </div>
               {ticket.description && (
-                <div className="mt-2 text-gray-700 whitespace-pre-wrap break-words max-w-full overflow-hidden">
-                  {ticket.description}
+                <div className="mt-2 text-gray-700 whitespace-pre-wrap break-words max-w-full overflow-hidden" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>
+                  {linkifyText(ticket.description)}
                 </div>
               )}
               {ticket.attachment_urls && ticket.attachment_urls.length > 0 && (
@@ -531,7 +603,6 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
         ]
           .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
           .map((item) => {
-            // Activity
             if (item.type === 'activity') {
               return (
                 <div key={item.id} className="flex justify-center my-4">
@@ -542,7 +613,6 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
               );
             }
             
-            // Internal Note
             if (item.type === 'note') {
               return (
                 <div key={item.id} className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
@@ -553,7 +623,9 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                     </span>
                     <span className="text-sm font-medium">{item.agent_name}</span>
                   </div>
-                  <p className="text-gray-700 italic">{item.note_text}</p>
+                  <p className="text-gray-700 italic" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>
+                    {linkifyText(item.note_text)}
+                  </p>
                   <p className="text-xs text-gray-500 mt-2">
                     {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}
                   </p>
@@ -561,7 +633,6 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
               );
             }
             
-            // Message from reseller
             if (item.sender_type === 'reseller') {
               return (
                 <div key={item.id} className="flex justify-start">
@@ -571,7 +642,9 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                     </div>
                     <div className="bg-gray-100 rounded-2xl rounded-tl-sm p-3">
                       <p className="text-xs text-gray-600 mb-1">{item.sender_name}</p>
-                      <p className="text-sm text-gray-900 whitespace-pre-wrap">{item.message}</p>
+                      <p className="text-sm text-gray-900 whitespace-pre-wrap" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>
+                        {linkifyText(item.message)}
+                      </p>
                       {item.attachment_url && (() => {
                         const ext = item.attachment_url.toLowerCase().split('.').pop();
                         
@@ -623,13 +696,14 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
               );
             }
             
-            // Message from agent
             return (
               <div key={item.id} className="flex justify-end">
                 <div className="flex items-start gap-2 max-w-[70%]">
                   <div className="bg-primary rounded-2xl rounded-tr-sm p-3">
                     <p className="text-xs text-blue-100 mb-1">{item.sender_name}</p>
-                    <p className="text-sm text-white whitespace-pre-wrap">{item.message}</p>
+                    <p className="text-sm text-white whitespace-pre-wrap" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>
+                      {linkifyText(item.message)}
+                    </p>
                     {item.attachment_url && (
                       <img
                         src={item.attachment_url}
@@ -654,7 +728,12 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
       </div>
 
       {/* Bottom Section */}
-      <div className="sticky bottom-0 border-t border-gray-200 bg-white">
+      <div 
+        className="sticky bottom-0 border-t border-gray-200 bg-white"
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         {/* Tabs */}
         <div className="flex px-4 pt-2 gap-4 border-b">
           <button
@@ -681,7 +760,6 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
 
         {/* Content */}
         <div className="p-4 relative">
-          {/* File Input (hidden) */}
           <input
             ref={fileInputRef}
             type="file"
@@ -692,7 +770,6 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
 
           {activeTab === 'reply' ? (
             <>
-              {/* Attachment Preview */}
               {attachment && (
                 <div className="mb-2 flex items-center gap-2 bg-gray-100 p-2 rounded-lg">
                   <Paperclip className="w-4 h-4 text-gray-600" />
@@ -711,7 +788,6 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                 </div>
               )}
 
-              {/* Canned Messages Dropdown */}
               {showCannedMessages && filteredCannedMessages.length > 0 && (
                 <div className="absolute bottom-full left-4 right-4 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto z-20">
                   {filteredCannedMessages.map((msg) => (
@@ -731,9 +807,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                 </div>
               )}
 
-              {/* Input Row */}
               <div className="flex items-center gap-2">
-                {/* Attachment Button */}
                 <Button
                   variant="ghost"
                   size="icon"
@@ -744,11 +818,11 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                   <Paperclip className="w-5 h-5 text-gray-600" />
                 </Button>
 
-                {/* Text Area */}
                 <Textarea
-                  placeholder="Type your message or use / for canned responses..."
+                  placeholder="Type message, paste screenshot (Ctrl+V), or drag & drop files..."
                   value={replyText}
                   onChange={handleReplyTextChange}
+                  onPaste={handlePaste}
                   rows={1}
                   className="flex-1 resize-none min-h-[40px] max-h-[200px] rounded-lg border-gray-300"
                   maxLength={800}
@@ -760,7 +834,6 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                   }}
                 />
 
-                {/* Send Button */}
                 <Button
                   onClick={handleSendReply}
                   disabled={(!replyText.trim() && !attachment) || sending || isUploading}
@@ -774,15 +847,13 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                 </Button>
               </div>
 
-              {/* Info Row */}
               <div className="flex justify-between items-center mt-2 text-xs text-gray-400">
                 <span>{replyText.length}/800</span>
-                <span>Use / to show quick replies</span>
+                <span>Use / for quick replies • Paste screenshots • Drag & drop files</span>
               </div>
             </>
           ) : (
             <>
-              {/* Attachment Preview for Notes */}
               {attachment && (
                 <div className="mb-2 flex items-center gap-2 bg-yellow-100 p-2 rounded-lg">
                   <Paperclip className="w-4 h-4 text-yellow-700" />
@@ -801,9 +872,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                 </div>
               )}
 
-              {/* Input Row */}
               <div className="flex items-center gap-2">
-                {/* Attachment Button */}
                 <Button
                   variant="ghost"
                   size="icon"
@@ -814,7 +883,6 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                   <Paperclip className="w-5 h-5 text-gray-600" />
                 </Button>
 
-                {/* Textarea */}
                 <Textarea
                   placeholder="Add an internal note (only visible to agents)..."
                   value={noteText}
@@ -830,7 +898,6 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                   }}
                 />
 
-                {/* Add Note Button */}
                 <Button
                   onClick={handleAddNote}
                   disabled={(!noteText.trim() && !attachment) || sending || isUploading}
@@ -844,7 +911,6 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                 </Button>
               </div>
 
-              {/* Info Row */}
               <div className="flex justify-between items-center mt-2 text-xs text-gray-400">
                 <span>🔒 Only visible to agents</span>
                 <span>{noteText.length}/800</span>

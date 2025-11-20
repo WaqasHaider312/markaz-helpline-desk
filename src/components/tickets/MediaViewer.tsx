@@ -28,23 +28,35 @@ export function MediaViewer({ mediaUrl, mediaType, onClose }: MediaViewerProps) 
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black flex flex-col">
+    <div 
+      className="fixed inset-0 z-[9999] bg-black flex flex-col"
+      onClick={onClose}
+    >
       <div className="flex items-center justify-between p-4 bg-black/50">
+        {/* Download button on LEFT */}
         <Button
           variant="ghost"
           size="icon"
-          onClick={onClose}
-          className="text-white hover:bg-white/20"
-        >
-          <X className="w-6 h-6" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleDownload}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDownload();
+          }}
           className="text-white hover:bg-white/20"
         >
           <Download className="w-6 h-6" />
+        </Button>
+        
+        {/* Close button on RIGHT */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+          className="text-white hover:bg-white/20"
+        >
+          <X className="w-6 h-6" />
         </Button>
       </div>
       
@@ -54,6 +66,7 @@ export function MediaViewer({ mediaUrl, mediaType, onClose }: MediaViewerProps) 
             src={mediaUrl}
             alt="Full screen"
             className="max-w-full max-h-full w-auto h-auto object-contain"
+            onClick={(e) => e.stopPropagation()}
           />
         ) : (
           <video
@@ -63,6 +76,7 @@ export function MediaViewer({ mediaUrl, mediaType, onClose }: MediaViewerProps) 
             playsInline
             className="max-w-full max-h-full w-auto h-auto"
             style={{ maxHeight: 'calc(100vh - 80px)' }}
+            onClick={(e) => e.stopPropagation()}
           />
         )}
       </div>

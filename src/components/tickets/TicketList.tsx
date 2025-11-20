@@ -438,7 +438,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
               key={ticket.id}
               className={`flex items-start gap-3 p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
                 selectedTicketId === ticket.id ? 'bg-blue-50 border-l-4 border-primary' : ''
-              }`}
+              } ${ticket.latest_message_sender === 'reseller' && ticket.status !== 'Resolved' ? 'bg-amber-50' : ''}`}
               onClick={() => {
                 onSelectTicket(ticket.id);
                 onTicketOpen?.(ticket);
@@ -457,15 +457,22 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-primary flex-shrink-0" />
-                    <span className="text-sm font-semibold text-primary">{ticket.ticket_number}</span>
-                  </div>
+                      {ticket.latest_message_sender === 'reseller' && ticket.status !== 'Resolved' && (
+                        <span className="h-2 w-2 bg-red-500 rounded-full animate-pulse flex-shrink-0"></span>
+                      )}
+                      <FileText className="h-4 w-4 text-primary flex-shrink-0" />
+                      <span className={`text-sm text-primary ${ticket.latest_message_sender === 'reseller' && ticket.status !== 'Resolved' ? 'font-bold' : 'font-semibold'}`}>
+                        {ticket.ticket_number}
+                      </span>
+                    </div>
                   <span className={`status-badge ${getStatusColor(ticket.status)} flex-shrink-0`}>
                     {ticket.status}
                   </span>
                 </div>
 
-                <p className="font-medium text-gray-900 mb-1 truncate">{ticket.reseller_name}</p>
+                <p className={`text-gray-900 mb-1 truncate ${ticket.latest_message_sender === 'reseller' && ticket.status !== 'Resolved' ? 'font-bold' : 'font-medium'}`}>
+                  {ticket.reseller_name}
+                </p>
 
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex gap-4 text-xs text-gray-600">

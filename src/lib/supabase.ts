@@ -9,6 +9,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export interface Ticket {
   id: string;
   ticket_number: string;
+  latest_message_sender?: string | null;  // Add this line
   reseller_id: string;
   reseller_name: string;
   reseller_phone: string;
