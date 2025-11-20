@@ -10,6 +10,8 @@ export interface Ticket {
   id: string;
   ticket_number: string;
   latest_message_sender?: string | null;  // Add this line
+  latest_message?: string | null;
+  latest_message_at?: string | null;
   reseller_id: string;
   reseller_name: string;
   reseller_phone: string;

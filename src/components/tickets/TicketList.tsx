@@ -438,7 +438,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
               key={ticket.id}
               className={`flex items-start gap-3 p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
                 selectedTicketId === ticket.id ? 'bg-blue-50 border-l-4 border-primary' : ''
-              } ${ticket.latest_message_sender === 'reseller' && ticket.status !== 'Resolved' ? 'bg-amber-50' : ''}`}
+              } ${((ticket.latest_message_sender === 'reseller' || !ticket.latest_message_sender) && ticket.status !== 'Resolved') ? 'bg-blue-50' : ''}`}
               onClick={() => {
                 onSelectTicket(ticket.id);
                 onTicketOpen?.(ticket);
@@ -457,11 +457,11 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                      {ticket.latest_message_sender === 'reseller' && ticket.status !== 'Resolved' && (
-                        <span className="h-2 w-2 bg-red-500 rounded-full animate-pulse flex-shrink-0"></span>
+                      {((ticket.latest_message_sender === 'reseller' || !ticket.latest_message_sender) && ticket.status !== 'Resolved') && (
+                        <span className="h-2 w-2 bg-blue-500 rounded-full animate-pulse flex-shrink-0"></span>
                       )}
                       <FileText className="h-4 w-4 text-primary flex-shrink-0" />
-                      <span className={`text-sm text-primary ${ticket.latest_message_sender === 'reseller' && ticket.status !== 'Resolved' ? 'font-bold' : 'font-semibold'}`}>
+                      <span className={`text-sm text-primary ${((ticket.latest_message_sender === 'reseller' || !ticket.latest_message_sender) && ticket.status !== 'Resolved') ? 'font-bold' : 'font-semibold'}`}>
                         {ticket.ticket_number}
                       </span>
                     </div>
@@ -470,7 +470,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
                   </span>
                 </div>
 
-                <p className={`text-gray-900 mb-1 truncate ${ticket.latest_message_sender === 'reseller' && ticket.status !== 'Resolved' ? 'font-bold' : 'font-medium'}`}>
+                <p className={`text-gray-900 mb-1 truncate ${((ticket.latest_message_sender === 'reseller' || !ticket.latest_message_sender) && ticket.status !== 'Resolved') ? 'font-bold' : 'font-medium'}`}>
                   {ticket.reseller_name}
                 </p>
 
@@ -490,13 +490,6 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
                 <p className="text-xs text-gray-500 mb-1 line-clamp-2">
                   {ticket.latest_message || ticket.description}
                 </p>
-
-                {ticket.unread_by_agent && ticket.latest_message_sender === 'reseller' && (
-                  <div className="flex items-center gap-1 mt-1">
-                    <span className="h-2 w-2 bg-blue-500 rounded-full animate-pulse"></span>
-                    <span className="text-xs text-blue-600 font-medium">New message</span>
-                  </div>
-                )}
 
                 <p className="text-xs text-gray-400">
                   {ticket.latest_message_at 

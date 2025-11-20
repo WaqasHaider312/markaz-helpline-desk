@@ -1,3 +1,4 @@
+import React from 'react';
 import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTickets } from '@/contexts/TicketsContext';
