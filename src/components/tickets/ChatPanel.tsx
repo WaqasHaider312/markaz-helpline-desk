@@ -24,32 +24,25 @@ interface CannedMessage {
 }
 
 // Utility function to make links clickable
-const linkifyText = (text: string) => {
+const linkifyText = (text: string): React.ReactNode => {
   const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/g;
   const parts = text.split(urlRegex);
   
-  return (
-    <>
-      {parts.map((part, index) => {
-        if (part.match(urlRegex)) {
-          const url = part.startsWith('http') ? part : `https://${part}`;
-          return (
-            
-              key={index}
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-500 hover:text-blue-600 underline break-all"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {part}
-            </a>
-          );
-        }
-        return part;
-      })}
-    </>
-  );
+  return parts.map((part, index) => {
+    const isUrl = part && (part.startsWith('http://') || part.startsWith('https://') || part.startsWith('www.'));
+    
+    if (isUrl) {
+      const url = part.startsWith('http') ? part : `https://${part}`;
+      return React.createElement('a', {
+        key: index,
+        href: url,
+        target: '_blank',
+        rel: 'noopener noreferrer',
+        className: 'text-blue-500 hover:text-blue-600 underline break-all'
+      }, part);
+    }
+    return part;
+  });
 };
 
 
