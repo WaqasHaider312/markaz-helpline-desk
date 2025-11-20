@@ -88,16 +88,24 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
       );
     }
 
-    // Apply sorting
-    if (sortBy === 'unread') {
-      filtered = filtered.filter(t => t.unread_by_agent).sort((a, b) => 
-        new Date(b.latest_message_at || b.created_at).getTime() - new Date(a.latest_message_at || a.created_at).getTime()
-      );
-    } else if (sortBy === 'newest') {
-      filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    } else if (sortBy === 'oldest' || sortBy === 'longest-wait') {
-      filtered.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-    }
+    // Apply sorting - Needs reply first, then already replied
+const needsReply = filtered.filter(t => !t.latest_message_sender || t.latest_message_sender === 'reseller');
+const alreadyReplied = filtered.filter(t => t.latest_message_sender === 'agent');
+
+    const sortGroup = (tickets: Ticket[]) => {
+      if (sortBy === 'unread') {
+        return tickets.filter(t => t.unread_by_agent).sort((a, b) => 
+          new Date(b.latest_message_at || b.created_at).getTime() - new Date(a.latest_message_at || a.created_at).getTime()
+        );
+      } else if (sortBy === 'newest') {
+        return tickets.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      } else if (sortBy === 'oldest' || sortBy === 'longest-wait') {
+        return tickets.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      }
+      return tickets;
+    };
+
+filtered = [...sortGroup(needsReply), ...sortGroup(alreadyReplied)];
 
     setFilteredTickets(filtered);
     onTicketsLoad?.(filtered);

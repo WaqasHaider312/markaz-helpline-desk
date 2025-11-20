@@ -46,6 +46,26 @@ const linkifyText = (text: string): React.ReactNode => {
   });
 };
 
+const linkifyTextWhite = (text: string): React.ReactNode => {
+  const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  
+  return parts.map((part, index) => {
+    const isUrl = part && (part.startsWith('http://') || part.startsWith('https://') || part.startsWith('www.'));
+    
+    if (isUrl) {
+      const url = part.startsWith('http') ? part : `https://${part}`;
+      return React.createElement('a', {
+        key: index,
+        href: url,
+        target: '_blank',
+        rel: 'noopener noreferrer',
+        className: 'text-white underline hover:text-blue-100 break-all'
+      }, part);
+    }
+    return part;
+  });
+};
 
 const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   const { profile } = useAuth();
@@ -701,7 +721,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                   <div className="bg-primary rounded-2xl rounded-tr-sm p-3">
                     <p className="text-xs text-blue-100 mb-1">{item.sender_name}</p>
                     <p className="text-sm text-white whitespace-pre-wrap" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>
-                      {linkifyText(item.message)}
+                      {linkifyTextWhite(item.message)}
                     </p>
                     {item.attachment_url && (
                       <img
