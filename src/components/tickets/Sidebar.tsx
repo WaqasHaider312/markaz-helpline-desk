@@ -35,87 +35,23 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
   });
 
   useEffect(() => {
-      fetchCounts();
-      
-      // Real-time subscription
-      const channel = supabase
-        .channel('ticket-counts')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => {
-          fetchCounts();
-        })
-        .subscribe();
+  if (!profile) return; // ✅ Only check profile
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }, [profile]);
-
-  const fetchCounts = async () => {
-    if (!profile) return;
-
-    try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      // My Open Tickets (assigned to me, not resolved)
-      const { count: myOpen } = await supabase
-        .from('tickets')
-        .select('*', { count: 'exact', head: true })
-        .eq('assigned_agent_id', profile.id)
-        .neq('status', 'Resolved');
-
-      // All Unresolved (everyone's Pending + In Progress)
-      const { count: allUnresolved } = await supabase
-        .from('tickets')
-        .select('*', { count: 'exact', head: true })
-        .in('status', ['Pending', 'In Progress'])
-        .not('assigned_agent_id', 'is', null);
-
-      // Unassigned (no agent assigned)
-      const { count: unassigned } = await supabase
-        .from('tickets')
-        .select('*', { count: 'exact', head: true })
-        .is('assigned_agent_id', null)
-        .neq('status', 'Resolved');
-
-      // All Assigned (assigned to anyone, not resolved)
-      const { count: allAssigned } = await supabase
-        .from('tickets')
-        .select('*', { count: 'exact', head: true })
-        .not('assigned_agent_id', 'is', null)
-        .neq('status', 'Resolved');
-
-      // My Resolved Today
-      const { count: myResolvedToday } = await supabase
-        .from('tickets')
-        .select('*', { count: 'exact', head: true })
-        .eq('resolved_by', profile.id)
-        .eq('status', 'Resolved')
-        .gte('updated_at', today.toISOString());
-
-      // All Resolved Today
-      const { count: allResolvedToday } = await supabase
-        .from('tickets')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'Resolved')
-        .gte('updated_at', today.toISOString());
-
-      setCounts({
-        myOpen: myOpen || 0,
-        allUnresolved: allUnresolved || 0,
-        unassigned: unassigned || 0,
-        allAssigned: allAssigned || 0,
-        myResolvedToday: myResolvedToday || 0,
-        allResolvedToday: allResolvedToday || 0,
-      });
-    } catch (error) {
-      console.error('Error fetching counts:', error);
-    }
-  };
+  setCounts({
+    myOpen: tickets.filter(t => t.assigned_agent_id === profile.id && t.status !== 'Resolved').length,
+    allAssigned: tickets.filter(t => t.status !== 'Resolved' && t.assigned_agent_id !== null).length,
+    unassigned: tickets.filter(t => t.assigned_agent_id === null && t.status !== 'Resolved').length,
+    myResolvedToday: tickets.filter(t => (t as any).resolved_by === profile.id && t.status === 'Resolved' && new Date(t.updated_at) >= today).length,
+    allResolvedToday: tickets.filter(t => t.status === 'Resolved' && new Date(t.updated_at) >= today).length,
+  });
+  }, [tickets, profile]);
+ 
 
   const views = [
     { id: 'my-open' as ViewType, label: 'My Open Tickets', icon: Inbox, count: counts.myOpen },
-    { id: 'all-unresolved' as ViewType, label: 'All Unresolved', icon: Clock, count: counts.allUnresolved },
     { id: 'unassigned' as ViewType, label: 'Unassigned Tickets', icon: UserX, count: counts.unassigned },
     { id: 'all-assigned' as ViewType, label: 'All Assigned', icon: Users, count: counts.allAssigned },
     { id: 'my-resolved-today' as ViewType, label: 'My Resolved Today', icon: CheckCircle, count: counts.myResolvedToday },

@@ -46,6 +46,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   const [activities, setActivities] = useState<any[]>([]);
   const [filteredCannedMessages, setFilteredCannedMessages] = useState<CannedMessage[]>([]);
   const [mediaViewer, setMediaViewer] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
+  const { tickets, refreshTickets } = useTickets();
 
   useEffect(() => {
     if (ticketId) {
@@ -312,6 +313,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
 
         if (!updateError) {
           setTicket(prev => prev ? {...prev, ...updates} : null);
+          await refreshTickets(); // ✅ Add this line
         }
         
         // Create activity if auto-assigned
