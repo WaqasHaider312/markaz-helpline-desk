@@ -53,7 +53,7 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
         .eq('id', ticketId);
 
       if (error) throw error;
-
+      await refreshTickets();
       toast.success('Issue type updated');
       setIsEditingIssueType(false);
     } catch (error) {
@@ -78,6 +78,8 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
     }
   };
 
+  const { refreshTickets } = useTickets(); // Add at top with other hooks
+
   const handleStatusChange = async (newStatus: string) => {
     if (!ticketId) return;
 
@@ -95,6 +97,8 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
 
       if (error) throw error;
       
+      await refreshTickets(); // Add this line - force immediate refresh
+
       // Create activity record
       let activityDetails = '';
       if (newStatus === 'Resolved') {
@@ -127,6 +131,7 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
     }
   };
 
+  
   const handleAssignChange = async (agentId: string) => {
     if (!ticketId) return;
 
@@ -138,7 +143,7 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
         .eq('id', ticketId);
 
       if (error) throw error;
-
+      await refreshTickets();
       // Create activity record
       const assignedTo = agentId === 'unassigned' ? null : agents.find(a => a.id === agentId)?.full_name;
       let activityDetails = '';

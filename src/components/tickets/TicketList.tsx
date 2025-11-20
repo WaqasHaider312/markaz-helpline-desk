@@ -135,6 +135,8 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
     setSelectedTickets(newSelected);
   };
 
+  const { refreshTickets } = useTickets(); // Add at top
+
   const handleBulkAssign = async () => {
     if (!selectedAgent || selectedTickets.size === 0) return;
 
@@ -178,6 +180,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
 
       setSelectedTickets(new Set());
       setSelectedAgent('');
+      await refreshTickets();
       toast.success(`${updates.length} tickets assigned`);
     } catch (error) {
       console.error('Error assigning tickets:', error);
@@ -213,6 +216,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
       }
 
       setSelectedTickets(new Set());
+      await refreshTickets(); // Add this
       toast.success(`${selectedTickets.size} tickets resolved`);
     } catch (error) {
       console.error('Error resolving tickets:', error);
