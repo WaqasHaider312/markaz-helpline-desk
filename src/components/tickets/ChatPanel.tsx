@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTickets } from '@/contexts/TicketsContext';
 import { supabase, Ticket, Message, InternalNote } from '@/lib/supabase';
-import { MessageCircle, ChevronRight, Paperclip, X, Loader2, Upload } from 'lucide-react';
+import { MessageCircle, ChevronRight, Paperclip, X, Loader2, Upload, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { formatDistanceToNow } from 'date-fns';
@@ -22,6 +22,11 @@ interface CannedMessage {
   id: string;
   message_text: string;
   shortcut_name?: string;
+}
+
+interface ResellerProfile {
+  reseller_status: 'blocked' | 'restricted' | 'genuine';
+  ticket_quota: number;
 }
 
 // Utility function to make links clickable
@@ -51,7 +56,7 @@ const linkifyTextWhite = (text: string): React.ReactNode => {
   const parts = text.split(urlRegex);
   
   return parts.map((part, index) => {
-    const isUrl = part && (part.startsWith('http://') || part.startsWith('https://') || part.startsWith('www.'));
+    const isUrl = part && (part.startsWith('http://') || part.startsWith('https://') || part.startsWith('https://') || part.startsWith('www.'));
     
     if (isUrl) {
       const url = part.startsWith('http') ? part : `https://${part}`;
@@ -91,6 +96,13 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   const [filteredCannedMessages, setFilteredCannedMessages] = useState<CannedMessage[]>([]);
   const [mediaViewer, setMediaViewer] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [showApprovalPopup, setShowApprovalPopup] = useState(false);
+  const [approvalData, setApprovalData] = useState<{
+    resellerName: string;
+    resellerId: string;
+    currentQuota: number;
+    activeCount: number;
+  } | null>(null);
 
   useEffect(() => {
     if (ticketId) {
@@ -342,6 +354,91 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
     }
   };
 
+  const checkApprovalNeeded = async (resellerId: string) => {
+    try {
+      // Get reseller profile
+      const { data: profile } = await supabase
+        .from('reseller_profiles')
+        .select('reseller_status, ticket_quota')
+        .eq('reseller_id', resellerId)
+        .single();
+
+      // Only for genuine users
+      if (!profile || profile.reseller_status !== 'genuine') return;
+
+      // Get all tickets for this reseller
+      const { data: resellerTickets } = await supabase
+        .from('tickets')
+        .select('status')
+        .eq('reseller_id', resellerId)
+        .in('status', ['Pending', 'In Progress']);
+
+      if (!resellerTickets) return;
+
+      const activeCount = resellerTickets.length;
+      const allInProgress = resellerTickets.every(t => t.status === 'In Progress');
+      const atQuotaLimit = activeCount >= profile.ticket_quota;
+
+      // Show popup if all conditions met
+      if (allInProgress && atQuotaLimit) {
+        setApprovalData({
+          resellerName: ticket?.reseller_name || 'Reseller',
+          resellerId: resellerId,
+          currentQuota: profile.ticket_quota,
+          activeCount: activeCount
+        });
+        setShowApprovalPopup(true);
+      }
+    } catch (error) {
+      console.error('Error checking approval:', error);
+    }
+  };
+
+  const handleApproveMoreTickets = async () => {
+    if (!approvalData) return;
+
+    try {
+      const newQuota = approvalData.currentQuota + 3;
+      
+      const { error } = await supabase
+        .from('reseller_profiles')
+        .update({ ticket_quota: newQuota })
+        .eq('reseller_id', approvalData.resellerId);
+
+      if (error) throw error;
+
+      toast.success(`Quota increased to ${newQuota} tickets`);
+      setShowApprovalPopup(false);
+      setApprovalData(null);
+    } catch (error) {
+      console.error('Error approving quota:', error);
+      toast.error('Failed to increase quota');
+    }
+  };
+
+  const handleRestrictReseller = async () => {
+    if (!approvalData) return;
+
+    try {
+      const { error } = await supabase
+        .from('reseller_profiles')
+        .update({ 
+          reseller_status: 'restricted',
+          ticket_quota: 3
+        })
+        .eq('reseller_id', approvalData.resellerId);
+
+      if (error) throw error;
+
+      toast.success('Reseller restricted to 3 tickets');
+      setShowApprovalPopup(false);
+      setApprovalData(null);
+    } catch (error) {
+      console.error('Error restricting reseller:', error);
+      toast.error('Failed to restrict reseller');
+    }
+  };
+
   const handleSendReply = async () => {
     if ((!replyText.trim() && !attachment) || !ticketId || !profile) return;
 
@@ -408,6 +505,11 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
             details: `${profile?.full_name} assigned ticket to self`
           });
         }
+      }
+
+      // Check if approval popup needed after sending reply
+      if (ticket?.reseller_id) {
+        await checkApprovalNeeded(ticket.reseller_id);
       }
 
       setReplyText('');
@@ -507,6 +609,77 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
           <div className="text-center">
             <Upload className="h-16 w-16 text-primary mx-auto mb-4" />
             <p className="text-xl font-semibold text-primary">Drop file here</p>
+          </div>
+        </div>
+      )}
+
+      {/* Approval Popup Modal */}
+      {showApprovalPopup && approvalData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-6 text-white">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="bg-white/20 p-2 rounded-lg">
+                  <AlertCircle className="h-6 w-6" />
+                </div>
+                <h3 className="text-xl font-bold">Decision Needed</h3>
+              </div>
+              <p className="text-blue-100 text-sm">
+                Reseller quota approval required
+              </p>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-gray-600">Reseller</span>
+                  <span className="text-base font-bold text-gray-900">{approvalData.resellerName}</span>
+                </div>
+                
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-gray-600">Active Tickets</span>
+                  <span className="text-base font-bold text-orange-600">{approvalData.activeCount}</span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-600">Current Quota</span>
+                  <span className="text-base font-bold text-blue-600">{approvalData.currentQuota}</span>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+                <p className="text-sm text-gray-700">
+                  All <span className="font-semibold">{approvalData.activeCount}</span> tickets are now <span className="font-semibold text-blue-600">In Progress</span>. 
+                  Should this reseller be allowed to create more tickets?
+                </p>
+              </div>
+
+              <div className="pt-2">
+                <p className="text-center text-sm font-medium text-gray-700 mb-3">
+                  Allow 3 more tickets?
+                </p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="p-6 bg-gray-50 border-t border-gray-200 flex gap-3">
+              <Button
+                onClick={handleApproveMoreTickets}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg shadow-md hover:shadow-lg transition-all"
+              >
+                ✓ Yes - Allow {approvalData.currentQuota + 3} Total
+              </Button>
+              
+              <Button
+                onClick={handleRestrictReseller}
+                variant="outline"
+                className="flex-1 border-2 border-red-500 text-red-600 hover:bg-red-50 font-semibold py-3 rounded-lg transition-all"
+              >
+                ✕ No - Restrict Account
+              </Button>
+            </div>
           </div>
         </div>
       )}
