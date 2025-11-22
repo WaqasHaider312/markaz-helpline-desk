@@ -431,13 +431,13 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
                 <SelectValue placeholder="Flag Reseller Status" className="text-center" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="blocked" className="text-white">
+                <SelectItem value="blocked" className="text-red-900">
                   🚫 Block Reseller
                 </SelectItem>
-                <SelectItem value="restricted" className="text-white">
+                <SelectItem value="restricted" className="text-yellow-900">
                   ⚠️ Restrict Reseller
                 </SelectItem>
-                <SelectItem value="genuine" className="text-white">
+                <SelectItem value="genuine" className="text-green-900">
                   ✅ Mark as Genuine
                 </SelectItem>
               </SelectContent>
@@ -596,7 +596,7 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
             </div>
 
             {/* Active Tickets Breakdown */}
-            <div className="border border-orange-200 rounded-lg p-3 bg-orange-50">
+            <div className="border border-orange-300 rounded-lg p-3 bg-orange-200">
               <div className="flex items-center justify-between mb-2">
                 <h5 className="text-sm font-semibold text-orange-900">Active Tickets</h5>
                 <span className="text-lg font-bold text-orange-600">
@@ -620,7 +620,7 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
             </div>
 
             {/* Resolved Tickets */}
-            <div className="border border-green-200 rounded-lg p-3 bg-green-50">
+            <div className="border border-green-300 rounded-lg p-3 bg-green-200">
               <div 
                 className="flex items-center justify-between cursor-pointer"
                 onClick={() => setShowResolvedBreakdown(!showResolvedBreakdown)}
