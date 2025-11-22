@@ -32,8 +32,9 @@ const getInitials = (name: string) => {
 
 const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpen, onTicketsLoad }: TicketListProps) => {
   const { profile } = useAuth();
-  const { tickets: allTickets, loadMoreTickets, hasMore, isLoadingMore } = useTickets();
+  const { tickets: allTickets } = useTickets();
   const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);
+  const [displayedTickets, setDisplayedTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -44,10 +45,10 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
   const [agents, setAgents] = useState<any[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string>('');
   const [assigning, setAssigning] = useState(false);
+  const [displayCount, setDisplayCount] = useState(20);
   const [autoLoadCount, setAutoLoadCount] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const observerRef = useRef<IntersectionObserver | null>(null);
 
   useEffect(() => {
     fetchAgents();
@@ -111,46 +112,35 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
     filtered = [...sortGroup(needsReply), ...sortGroup(alreadyReplied)];
 
     setFilteredTickets(filtered);
+    setDisplayedTickets(filtered.slice(0, displayCount));
     onTicketsLoad?.(filtered);
     setLoading(false);
-  }, [allTickets, currentView, profile, topicFilter, statusFilter, searchQuery, sortBy]);
+  }, [allTickets, currentView, profile, topicFilter, statusFilter, searchQuery, sortBy, displayCount]);
+
+  // Reset display count when view/filters change
+  useEffect(() => {
+    setDisplayCount(20);
+    setAutoLoadCount(0);
+  }, [currentView, topicFilter, statusFilter, searchQuery, sortBy]);
 
   // Scroll detection for auto-load
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    // Disconnect previous observer
-    if (observerRef.current) {
-      observerRef.current.disconnect();
-    }
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const bottomReached = scrollHeight - scrollTop - clientHeight < 100;
 
-    // Create sentinel element at bottom
-    const sentinel = document.createElement('div');
-    sentinel.style.height = '1px';
-    container.appendChild(sentinel);
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (entry.isIntersecting && hasMore && !isLoadingMore && autoLoadCount < 2) {
-          loadMoreTickets();
-          setAutoLoadCount(prev => prev + 1);
-        }
-      },
-      { threshold: 0.1 }
-    );
-
-    observer.observe(sentinel);
-    observerRef.current = observer;
-
-    return () => {
-      observer.disconnect();
-      if (container.contains(sentinel)) {
-        container.removeChild(sentinel);
+      if (bottomReached && displayCount < filteredTickets.length && autoLoadCount < 2) {
+        setDisplayCount(prev => prev + 20);
+        setAutoLoadCount(prev => prev + 1);
       }
     };
-  }, [hasMore, isLoadingMore, autoLoadCount, loadMoreTickets]);
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [displayCount, filteredTickets.length, autoLoadCount]);
 
   useKeyboardShortcuts({
     onFocusSearch: () => {
@@ -273,6 +263,10 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
       setAssigning(false);
     }
   };
+
+  const handleLoadMore = () => {
+    setDisplayCount(prev => prev + 20);
+  };
       
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -299,6 +293,8 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
         return 'Unread Messages';
     }
   };
+
+  const hasMore = displayCount < filteredTickets.length;
 
   return (
     <div className="w-[380px] bg-white border-r border-gray-200 flex flex-col h-full">
@@ -462,14 +458,19 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
           </div>
         )}
 
-        {/* Sort indicator */}
-        <p className="text-xs text-muted-foreground mt-2">
-          Sorted by: {getSortLabel(sortBy)}
-        </p>
+        {/* Sort indicator + Count */}
+        <div className="flex justify-between items-center mt-2">
+          <p className="text-xs text-muted-foreground">
+            Sorted by: {getSortLabel(sortBy)}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Showing {displayedTickets.length} of {filteredTickets.length}
+          </p>
+        </div>
       </div>
 
       {/* Ticket List */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto divide-y divide-gray-200 relative">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto divide-y divide-gray-200">
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-muted-foreground">Loading tickets...</p>
@@ -482,7 +483,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
           </div>
         ) : (
           <>
-            {filteredTickets.map((ticket) => (
+            {displayedTickets.map((ticket) => (
               <div
                 key={ticket.id}
                 className={`flex items-start gap-3 p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
@@ -550,32 +551,22 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
               </div>
             ))}
 
-            {/* Loading blur effect during auto-load */}
-            {isLoadingMore && autoLoadCount < 2 && (
-              <div className="relative h-20">
-                <div className="absolute inset-0 bg-white/60 backdrop-blur-sm flex items-center justify-center">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                </div>
-              </div>
-            )}
-
-            {/* Load More Button after 2 auto-loads */}
-            {hasMore && autoLoadCount >= 2 && !isLoadingMore && (
-              <div className="p-4">
-                <Button
-                  onClick={() => loadMoreTickets()}
-                  className="w-full"
-                  variant="outline"
+            {/* Load More Button */}
+            {hasMore && autoLoadCount >= 2 && (
+              <div className="p-4 flex justify-center">
+                <button
+                  onClick={handleLoadMore}
+                  className="text-sm text-primary hover:underline"
                 >
-                  Load More Tickets
-                </Button>
+                  Load 20 More
+                </button>
               </div>
             )}
 
-            {/* Loading during manual load */}
-            {isLoadingMore && autoLoadCount >= 2 && (
-              <div className="p-4 flex items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            {/* Auto-loading indicator */}
+            {hasMore && autoLoadCount < 2 && (
+              <div className="p-4 flex justify-center">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
               </div>
             )}
           </>
