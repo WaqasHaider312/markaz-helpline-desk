@@ -405,10 +405,10 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
             <p className="text-xs text-gray-500 mb-0.5">Status</p>
             <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold ${
               resellerStatus === 'blocked' 
-                ? 'bg-red-100 text-red-800' 
+                ? 'bg-red-600 text-white' 
                 : resellerStatus === 'restricted' 
-                ? 'bg-yellow-100 text-yellow-800' 
-                : 'bg-green-100 text-green-800'
+                ? 'bg-yellow-600 text-white' 
+                : 'bg-green-600 text-white'
             }`}>
               {resellerStatus === 'blocked' && '🚫 Blocked'}
               {resellerStatus === 'restricted' && '⚠️ Restricted'}
@@ -427,17 +427,17 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
           {/* Flag Dropdown Button */}
           <div>
             <Select onValueChange={handleFlagReseller}>
-              <SelectTrigger className="w-full h-9 text-xs">
-                <SelectValue placeholder="Flag Reseller..." />
+              <SelectTrigger className="w-full bg-orange-600 hover:bg-orange-700 text-white text-xs">
+                <SelectValue placeholder="Flag Reseller Status" className="text-center" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="blocked" className="text-red-600">
+                <SelectItem value="blocked" className="text-white">
                   🚫 Block Reseller
                 </SelectItem>
-                <SelectItem value="restricted" className="text-yellow-600">
+                <SelectItem value="restricted" className="text-white">
                   ⚠️ Restrict Reseller
                 </SelectItem>
-                <SelectItem value="genuine" className="text-green-600">
+                <SelectItem value="genuine" className="text-white">
                   ✅ Mark as Genuine
                 </SelectItem>
               </SelectContent>
