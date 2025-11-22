@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, Ticket } from '@/lib/supabase';
 import { ViewType } from '@/pages/Tickets';
-import { Search, SlidersHorizontal, FileText, Check } from 'lucide-react';
+import { Search, SlidersHorizontal, FileText, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useKeyboardShortcuts } from './KeyboardShortcuts';
@@ -32,7 +32,7 @@ const getInitials = (name: string) => {
 
 const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpen, onTicketsLoad }: TicketListProps) => {
   const { profile } = useAuth();
-  const { tickets: allTickets } = useTickets();
+  const { tickets: allTickets, loadMoreTickets, hasMore, isLoadingMore } = useTickets();
   const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -44,7 +44,10 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
   const [agents, setAgents] = useState<any[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string>('');
   const [assigning, setAssigning] = useState(false);
+  const [autoLoadCount, setAutoLoadCount] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
   useEffect(() => {
     fetchAgents();
@@ -89,8 +92,8 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
     }
 
     // Apply sorting - Needs reply first, then already replied
-const needsReply = filtered.filter(t => !t.latest_message_sender || t.latest_message_sender === 'reseller');
-const alreadyReplied = filtered.filter(t => t.latest_message_sender === 'agent');
+    const needsReply = filtered.filter(t => !t.latest_message_sender || t.latest_message_sender === 'reseller');
+    const alreadyReplied = filtered.filter(t => t.latest_message_sender === 'agent');
 
     const sortGroup = (tickets: Ticket[]) => {
       if (sortBy === 'unread') {
@@ -105,12 +108,49 @@ const alreadyReplied = filtered.filter(t => t.latest_message_sender === 'agent')
       return tickets;
     };
 
-filtered = [...sortGroup(needsReply), ...sortGroup(alreadyReplied)];
+    filtered = [...sortGroup(needsReply), ...sortGroup(alreadyReplied)];
 
     setFilteredTickets(filtered);
     onTicketsLoad?.(filtered);
     setLoading(false);
   }, [allTickets, currentView, profile, topicFilter, statusFilter, searchQuery, sortBy]);
+
+  // Scroll detection for auto-load
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    // Disconnect previous observer
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+    }
+
+    // Create sentinel element at bottom
+    const sentinel = document.createElement('div');
+    sentinel.style.height = '1px';
+    container.appendChild(sentinel);
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry.isIntersecting && hasMore && !isLoadingMore && autoLoadCount < 2) {
+          loadMoreTickets();
+          setAutoLoadCount(prev => prev + 1);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(sentinel);
+    observerRef.current = observer;
+
+    return () => {
+      observer.disconnect();
+      if (container.contains(sentinel)) {
+        container.removeChild(sentinel);
+      }
+    };
+  }, [hasMore, isLoadingMore, autoLoadCount, loadMoreTickets]);
 
   useKeyboardShortcuts({
     onFocusSearch: () => {
@@ -143,7 +183,7 @@ filtered = [...sortGroup(needsReply), ...sortGroup(alreadyReplied)];
     setSelectedTickets(newSelected);
   };
 
-  const { refreshTickets } = useTickets(); // Add at top
+  const { refreshTickets } = useTickets();
 
   const handleBulkAssign = async () => {
     if (!selectedAgent || selectedTickets.size === 0) return;
@@ -224,7 +264,7 @@ filtered = [...sortGroup(needsReply), ...sortGroup(alreadyReplied)];
       }
 
       setSelectedTickets(new Set());
-      await refreshTickets(); // Add this
+      await refreshTickets();
       toast.success(`${selectedTickets.size} tickets resolved`);
     } catch (error) {
       console.error('Error resolving tickets:', error);
@@ -429,7 +469,7 @@ filtered = [...sortGroup(needsReply), ...sortGroup(alreadyReplied)];
       </div>
 
       {/* Ticket List */}
-      <div className="flex-1 overflow-y-auto divide-y divide-gray-200">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto divide-y divide-gray-200 relative">
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-muted-foreground">Loading tickets...</p>
@@ -441,73 +481,104 @@ filtered = [...sortGroup(needsReply), ...sortGroup(alreadyReplied)];
             <p className="text-sm text-muted-foreground mt-1">Try adjusting your filters</p>
           </div>
         ) : (
-          filteredTickets.map((ticket) => (
-            <div
-              key={ticket.id}
-              className={`flex items-start gap-3 p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
-                selectedTicketId === ticket.id ? 'bg-blue-50 border-l-4 border-primary' : ''
-              } ${((ticket.latest_message_sender === 'reseller' || !ticket.latest_message_sender) && ticket.status !== 'Resolved') ? 'bg-blue-50' : ''}`}
-              onClick={() => {
-                onSelectTicket(ticket.id);
-                onTicketOpen?.(ticket);
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={selectedTickets.has(ticket.id)}
-                onChange={(e) => {
-                  e.stopPropagation();
-                  handleTicketCheckbox(ticket.id);
+          <>
+            {filteredTickets.map((ticket) => (
+              <div
+                key={ticket.id}
+                className={`flex items-start gap-3 p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
+                  selectedTicketId === ticket.id ? 'bg-blue-50 border-l-4 border-primary' : ''
+                } ${((ticket.latest_message_sender === 'reseller' || !ticket.latest_message_sender) && ticket.status !== 'Resolved') ? 'bg-blue-50' : ''}`}
+                onClick={() => {
+                  onSelectTicket(ticket.id);
+                  onTicketOpen?.(ticket);
                 }}
-                className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer flex-shrink-0"
-              />
-              
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                      {((ticket.latest_message_sender === 'reseller' || !ticket.latest_message_sender) && ticket.status !== 'Resolved') && (
-                        <span className="h-2 w-2 bg-blue-500 rounded-full animate-pulse flex-shrink-0"></span>
-                      )}
-                      <FileText className="h-4 w-4 text-primary flex-shrink-0" />
-                      <span className={`text-sm text-primary ${((ticket.latest_message_sender === 'reseller' || !ticket.latest_message_sender) && ticket.status !== 'Resolved') ? 'font-bold' : 'font-semibold'}`}>
-                        {ticket.ticket_number}
-                      </span>
-                    </div>
-                  <span className={`status-badge ${getStatusColor(ticket.status)} flex-shrink-0`}>
-                    {ticket.status}
-                  </span>
-                </div>
-
-                <p className={`text-gray-900 mb-1 truncate ${((ticket.latest_message_sender === 'reseller' || !ticket.latest_message_sender) && ticket.status !== 'Resolved') ? 'font-bold' : 'font-medium'}`}>
-                  {ticket.reseller_name}
-                </p>
-
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex gap-4 text-xs text-gray-600">
-                    <span>Order: {ticket.order_id}</span>
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedTickets.has(ticket.id)}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    handleTicketCheckbox(ticket.id);
+                  }}
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer flex-shrink-0"
+                />
+                
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                        {((ticket.latest_message_sender === 'reseller' || !ticket.latest_message_sender) && ticket.status !== 'Resolved') && (
+                          <span className="h-2 w-2 bg-blue-500 rounded-full animate-pulse flex-shrink-0"></span>
+                        )}
+                        <FileText className="h-4 w-4 text-primary flex-shrink-0" />
+                        <span className={`text-sm text-primary ${((ticket.latest_message_sender === 'reseller' || !ticket.latest_message_sender) && ticket.status !== 'Resolved') ? 'font-bold' : 'font-semibold'}`}>
+                          {ticket.ticket_number}
+                        </span>
+                      </div>
+                    <span className={`status-badge ${getStatusColor(ticket.status)} flex-shrink-0`}>
+                      {ticket.status}
+                    </span>
                   </div>
-                  {ticket.assigned_agent_id ? (
-                    <div className="h-6 w-6 rounded-full bg-primary text-white text-xs flex items-center justify-center flex-shrink-0">
-                      {getInitials((ticket as any).agent_profiles?.full_name || 'AG')}
+
+                  <p className={`text-gray-900 mb-1 truncate ${((ticket.latest_message_sender === 'reseller' || !ticket.latest_message_sender) && ticket.status !== 'Resolved') ? 'font-bold' : 'font-medium'}`}>
+                    {ticket.reseller_name}
+                  </p>
+
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex gap-4 text-xs text-gray-600">
+                      <span>Order: {ticket.order_id}</span>
                     </div>
-                  ) : (
-                    <span className="text-xs text-gray-400">Unassigned</span>
-                  )}
+                    {ticket.assigned_agent_id ? (
+                      <div className="h-6 w-6 rounded-full bg-primary text-white text-xs flex items-center justify-center flex-shrink-0">
+                        {getInitials((ticket as any).agent_profiles?.full_name || 'AG')}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-400">Unassigned</span>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-gray-500 mb-1 line-clamp-2">
+                    {ticket.latest_message || ticket.description}
+                  </p>
+
+                  <p className="text-xs text-gray-400">
+                    {ticket.latest_message_at 
+                      ? formatDistanceToNow(new Date(ticket.latest_message_at), { addSuffix: true })
+                      : formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true })
+                    }
+                  </p>
                 </div>
-
-                <p className="text-xs text-gray-500 mb-1 line-clamp-2">
-                  {ticket.latest_message || ticket.description}
-                </p>
-
-                <p className="text-xs text-gray-400">
-                  {ticket.latest_message_at 
-                    ? formatDistanceToNow(new Date(ticket.latest_message_at), { addSuffix: true })
-                    : formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true })
-                  }
-                </p>
               </div>
-            </div>
-          ))
+            ))}
+
+            {/* Loading blur effect during auto-load */}
+            {isLoadingMore && autoLoadCount < 2 && (
+              <div className="relative h-20">
+                <div className="absolute inset-0 bg-white/60 backdrop-blur-sm flex items-center justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              </div>
+            )}
+
+            {/* Load More Button after 2 auto-loads */}
+            {hasMore && autoLoadCount >= 2 && !isLoadingMore && (
+              <div className="p-4">
+                <Button
+                  onClick={() => loadMoreTickets()}
+                  className="w-full"
+                  variant="outline"
+                >
+                  Load More Tickets
+                </Button>
+              </div>
+            )}
+
+            {/* Loading during manual load */}
+            {isLoadingMore && autoLoadCount >= 2 && (
+              <div className="p-4 flex items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
