@@ -1038,7 +1038,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo, onSelectTicket }: ChatPan
               )}
 
               {showCannedMessages && filteredCannedMessages.length > 0 && (
-                <div className="absolute bottom-full left-4 right-4 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto z-20">
+                <div data-canned-dropdown="true" className="absolute bottom-full left-4 right-4 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto z-20">
                   {filteredCannedMessages.map((msg) => (
                     <button
                       key={msg.id}

@@ -70,6 +70,7 @@ const Tickets = () => {
           ticketId={selectedTicketId}
           onToggleInfo={() => setShowInfo(!showInfo)}
           showInfo={showInfo}
+            onSelectTicket={setSelectedTicketId}
         />
 
         {/* Far Right - Info Panel */}

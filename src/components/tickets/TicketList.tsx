@@ -59,32 +59,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
 
     let filtered = [...allTickets];
 
-    // Apply view filter
-    if (currentView === 'my-open') {
-      filtered = filtered.filter(t => t.assigned_agent_id === profile.id && t.status !== 'Resolved');
-    } else if (currentView === 'all-assigned') {
-      filtered = filtered.filter(t => t.status !== 'Resolved' && t.assigned_agent_id !== null);
-    } else if (currentView === 'unassigned') {
-      filtered = filtered.filter(t => t.assigned_agent_id === null && t.status !== 'Resolved');
-    } else if (currentView === 'my-resolved-today') {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      filtered = filtered.filter(t => (t as any).resolved_by === profile.id && t.status === 'Resolved' && new Date(t.updated_at) >= today);
-    } else if (currentView === 'all-resolved-today') {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      filtered = filtered.filter(t => t.status === 'Resolved' && new Date(t.updated_at) >= today);
-    } else if (currentView === 'all-tickets') {
-     // Show all tickets - no filtering
-    }
-
-    // Apply filters
-    if (topicFilter !== 'All Topics') {
-      filtered = filtered.filter(t => t.issue_type === topicFilter);
-    }
-    if (statusFilter !== 'All') {
-      filtered = filtered.filter(t => t.status === statusFilter);
-    }
+    // If searching, search ALL tickets and skip view filter
     if (searchQuery) {
       filtered = filtered.filter(t => 
         t.ticket_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -92,7 +67,35 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
         t.order_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         t.reseller_name?.toLowerCase().includes(searchQuery.toLowerCase())
       );
+    } else {
+      // Only apply view filter when NOT searching
+      if (currentView === 'my-open') {
+        filtered = filtered.filter(t => t.assigned_agent_id === profile.id && t.status !== 'Resolved');
+      } else if (currentView === 'all-assigned') {
+        filtered = filtered.filter(t => t.status !== 'Resolved' && t.assigned_agent_id !== null);
+      } else if (currentView === 'unassigned') {
+        filtered = filtered.filter(t => t.assigned_agent_id === null && t.status !== 'Resolved');
+      } else if (currentView === 'my-resolved-today') {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        filtered = filtered.filter(t => (t as any).resolved_by === profile.id && t.status === 'Resolved' && new Date(t.updated_at) >= today);
+      } else if (currentView === 'all-resolved-today') {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        filtered = filtered.filter(t => t.status === 'Resolved' && new Date(t.updated_at) >= today);
+      } else if (currentView === 'all-tickets') {
+        // Show all tickets - no filtering
+      }
     }
+
+    // Apply topic and status filters (these work with search too)
+    if (topicFilter !== 'All Topics') {
+      filtered = filtered.filter(t => t.issue_type === topicFilter);
+    }
+    if (statusFilter !== 'All') {
+      filtered = filtered.filter(t => t.status === statusFilter);
+    }
+  
 
     // Apply sorting - Needs reply first, then already replied
     const needsReply = filtered.filter(t => !t.latest_message_sender || t.latest_message_sender === 'reseller');
