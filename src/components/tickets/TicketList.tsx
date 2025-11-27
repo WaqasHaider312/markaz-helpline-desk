@@ -74,6 +74,8 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       filtered = filtered.filter(t => t.status === 'Resolved' && new Date(t.updated_at) >= today);
+    } else if (currentView === 'all-tickets') {
+     // Show all tickets - no filtering
     }
 
     // Apply filters

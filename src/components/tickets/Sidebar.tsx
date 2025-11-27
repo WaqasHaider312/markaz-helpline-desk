@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { useTickets } from '@/contexts/TicketsContext';
 
+
 interface SidebarProps {
   currentView: ViewType;
   onViewChange: (view: ViewType) => void;
@@ -56,6 +57,7 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
     { id: 'all-assigned' as ViewType, label: 'All Assigned', icon: Users, count: counts.allAssigned },
     { id: 'my-resolved-today' as ViewType, label: 'My Resolved Today', icon: CheckCircle, count: counts.myResolvedToday },
     { id: 'all-resolved-today' as ViewType, label: 'All Resolved Today', icon: CheckCircle, count: counts.allResolvedToday },
+    { id: 'all-tickets' as ViewType, label: 'All Tickets Ever', icon: Clock, count: tickets.length }, // Add this
   ];
 
   const menuItems = [

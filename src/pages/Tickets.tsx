@@ -12,7 +12,8 @@ export type ViewType =
   | 'unassigned' 
   | 'all-assigned' 
   | 'my-resolved-today' 
-  | 'all-resolved-today';
+  | 'all-resolved-today'
+  | 'all-tickets';
 
 const Tickets = () => {
   const { profile } = useAuth();

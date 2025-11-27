@@ -16,6 +16,7 @@ interface ChatPanelProps {
   ticketId: string | null;
   onToggleInfo: () => void;
   showInfo: boolean;
+  onSelectTicket?: (ticketId: string) => void;
 }
 
 interface CannedMessage {
@@ -72,7 +73,7 @@ const linkifyTextWhite = (text: string): React.ReactNode => {
   });
 };
 
-const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
+const ChatPanel = ({ ticketId, onToggleInfo, showInfo, onSelectTicket }: ChatPanelProps) => {
   const { profile } = useAuth();
   const { tickets, refreshTickets } = useTickets();
   const [ticket, setTicket] = useState<Ticket | null>(null);
@@ -97,6 +98,12 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   const [mediaViewer, setMediaViewer] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [showApprovalPopup, setShowApprovalPopup] = useState(false);
+  const [showResellerTicketsModal, setShowResellerTicketsModal] = useState(false);
+  const [resellerTickets, setResellerTickets] = useState<Ticket[]>([]);
+  const [resellerTicketsDisplay, setResellerTicketsDisplay] = useState<Ticket[]>([]);
+  const [resellerTicketsOffset, setResellerTicketsOffset] = useState(5);
+  const [previousTicketId, setPreviousTicketId] = useState<string | null>(null);
+  const [selectedCannedIndex, setSelectedCannedIndex] = useState(0);
   const [approvalData, setApprovalData] = useState<{
     resellerName: string;
     resellerId: string;
@@ -215,6 +222,26 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
     } catch (error) {
       console.error('Error fetching canned messages:', error);
     }
+  };
+
+    const loadResellerTickets = () => {
+    if (!ticket) return;
+    
+    setPreviousTicketId(ticketId); // Store current ticket before opening modal
+    
+    const filtered = tickets.filter(t => t.reseller_phone === ticket.reseller_phone)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    
+    setResellerTickets(filtered);
+    setResellerTicketsDisplay(filtered.slice(0, 5));
+    setResellerTicketsOffset(5);
+    setShowResellerTicketsModal(true);
+  };
+
+  const loadMoreResellerTickets = () => {
+    const nextBatch = resellerTickets.slice(0, resellerTicketsOffset + 5);
+    setResellerTicketsDisplay(nextBatch);
+    setResellerTicketsOffset(prev => prev + 5);
   };
 
   const subscribeToUpdates = () => {
@@ -559,6 +586,15 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
   const handleCannedMessageSelect = (messageText: string) => {
     setReplyText(messageText);
     setShowCannedMessages(false);
+    
+    // Auto-expand textarea
+    setTimeout(() => {
+      const textarea = document.querySelector('textarea[placeholder*="Type message"]') as HTMLTextAreaElement;
+      if (textarea) {
+        textarea.style.height = 'auto';
+        textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+      }
+    }, 0);
   };
 
   const handleReplyTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -688,10 +724,31 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
       <div className="sticky top-0 p-4 border-b border-gray-200 bg-white z-10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
+            {previousTicketId && previousTicketId !== ticketId && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  onSelectTicket?.(previousTicketId);
+                  setPreviousTicketId(null);
+                }}
+                className="text-xs text-gray-600 hover:text-primary hover:bg-gray-100"
+              >
+                ← Back
+              </Button>
+            )}
             <h2 className="text-xl font-bold text-foreground">{ticket?.ticket_number}</h2>
             <span className="bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded">
               {ticket?.issue_type}
             </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={loadResellerTickets}
+              className="text-xs text-primary hover:text-primary hover:bg-blue-50"
+            >
+              All Tickets ({tickets.filter(t => t.reseller_phone === ticket?.reseller_phone).length})
+            </Button>
           </div>
           <Button variant="ghost" size="icon" onClick={onToggleInfo}>
             <ChevronRight className={`h-5 w-5 transition-transform ${showInfo ? '' : 'rotate-180'}`} />
@@ -1015,6 +1072,23 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
                   value={replyText}
                   onChange={handleReplyTextChange}
                   onPaste={handlePaste}
+                  onKeyDown={(e) => {
+                  if (showCannedMessages && filteredCannedMessages.length > 0) {
+                    if (e.key === 'PageDown') {
+                      e.preventDefault();
+                      setSelectedCannedIndex(prev => 
+                        prev < filteredCannedMessages.length - 1 ? prev + 1 : prev
+                      );
+                    } else if (e.key === 'PageUp') {
+                      e.preventDefault();
+                      setSelectedCannedIndex(prev => prev > 0 ? prev - 1 : 0);
+                    } else if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleCannedMessageSelect(filteredCannedMessages[selectedCannedIndex].message_text);
+                      setSelectedCannedIndex(0);
+                    }
+                  }
+                }}
                   rows={1}
                   className="flex-1 resize-none min-h-[40px] max-h-[200px] rounded-lg border-gray-300"
                   maxLength={800}
@@ -1148,6 +1222,85 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo }: ChatPanelProps) => {
           onClose={() => setMediaViewer(null)}
         />
       )}
+
+      {/* Reseller Tickets Modal */}
+        {showResellerTicketsModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col">
+              {/* Modal Header */}
+              <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-foreground">All Tickets</h3>
+                  <p className="text-sm text-gray-600">{ticket?.reseller_name} - {ticket?.reseller_phone}</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowResellerTicketsModal(false)}
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="flex-1 overflow-y-auto p-4">
+                {resellerTicketsDisplay.length === 0 ? (
+                  <p className="text-center text-gray-500 py-8">No tickets found</p>
+                ) : (
+                  <div className="space-y-2">
+                    {resellerTicketsDisplay.map((t) => (
+                      <div
+                        key={t.id}
+                        onClick={() => {
+                          setShowResellerTicketsModal(false);
+                          if (t.id !== ticketId) {
+                            onSelectTicket?.(t.id);
+                          }
+                        }}
+                        className={`p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors ${
+                          t.id === ticketId ? 'bg-blue-50 border-primary' : ''
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-semibold text-primary">{t.ticket_number}</span>
+                          <span className={`status-badge ${
+                            t.status === 'Pending' ? 'status-pending' :
+                            t.status === 'In Progress' ? 'status-in-progress' :
+                            'status-resolved'
+                          }`}>
+                            {t.status}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-700 mb-1">
+                          <span className="font-medium">Issue:</span> {t.issue_type}
+                        </div>
+                        <div className="text-sm text-gray-700">
+                          <span className="font-medium">Order:</span> {t.order_id}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-2">
+                          {formatDistanceToNow(new Date(t.created_at), { addSuffix: true })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              {resellerTicketsOffset < resellerTickets.length && (
+                <div className="p-4 border-t border-gray-200 flex justify-center">
+                  <Button
+                    onClick={loadMoreResellerTickets}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    Load More ({resellerTickets.length - resellerTicketsOffset} remaining)
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
     </div>
   );
 };
