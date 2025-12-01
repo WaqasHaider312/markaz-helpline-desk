@@ -227,7 +227,10 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo, onSelectTicket }: ChatPan
     const loadResellerTickets = () => {
     if (!ticket) return;
     
-    setPreviousTicketId(ticketId); // Store current ticket before opening modal
+    // Only store if not already set (preserve original ticket)
+    if (!previousTicketId) {
+      setPreviousTicketId(ticketId);
+    }
     
     const filtered = tickets.filter(t => t.reseller_phone === ticket.reseller_phone)
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());

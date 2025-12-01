@@ -23,33 +23,45 @@ export const TicketsProvider = ({ children }: { children: ReactNode }) => {
   const channelRef = useRef<any>(null);
 
   const refreshTickets = async () => {
-    if (!profile) return;
+  if (!profile) return;
 
-    try {
-      let allTickets: any[] = [];
-      let from = 0;
-      const pageSize = 1000;
+  try {
+    // Load first 1000 immediately
+    const { data: initialData, error: initialError } = await supabase
+      .from('tickets')
+      .select('*, agent_profiles!assigned_agent_id(full_name)')
+      .order('created_at', { ascending: false })
+      .range(0, 999);
 
-      while (true) {
-        const { data, error } = await supabase
-          .from('tickets')
-          .select('*, agent_profiles!assigned_agent_id(full_name)')
-          .order('created_at', { ascending: false })
-          .range(from, from + pageSize - 1);
+    if (initialError) throw initialError;
+    
+    // Show first batch immediately
+    setTickets(initialData || []);
 
-        if (error) throw error;
-        if (!data || data.length === 0) break;
-        
-        allTickets = [...allTickets, ...data];
-        if (data.length < pageSize) break;
-        from += pageSize;
-      }
+    // Load rest in background
+    let allTickets = [...(initialData || [])];
+    let from = 1000;
+    const pageSize = 1000;
 
-      setTickets(allTickets);
-    } catch (error) {
-      console.error('Error fetching tickets:', error);
+    while (true) {
+      const { data, error } = await supabase
+        .from('tickets')
+        .select('*, agent_profiles!assigned_agent_id(full_name)')
+        .order('created_at', { ascending: false })
+        .range(from, from + pageSize - 1);
+
+      if (error || !data || data.length === 0) break;
+      
+      allTickets = [...allTickets, ...data];
+      setTickets([...allTickets]); // Update progressively
+      
+      if (data.length < pageSize) break;
+      from += pageSize;
     }
-  };
+  } catch (error) {
+    console.error('Error fetching tickets:', error);
+  }
+};
 
   useEffect(() => {
     if (!profile) return;

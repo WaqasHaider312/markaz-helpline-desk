@@ -208,12 +208,24 @@ const Dashboard = () => {
 
     setLoading(true);
     try {
-      const { data: allTickets, error: ticketsError } = await supabase
-        .from('tickets')
-        .select('*')
-        .order('created_at', { ascending: false });
+      let allTickets: any[] = [];
+let from = 0;
+const pageSize = 1000;
 
-      if (ticketsError) throw ticketsError;
+while (true) {
+  const { data, error } = await supabase
+    .from('tickets')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .range(from, from + pageSize - 1);
+
+  if (error) throw error;
+  if (!data || data.length === 0) break;
+  
+  allTickets = [...allTickets, ...data];
+  if (data.length < pageSize) break;
+  from += pageSize;
+}
 
       const tickets = allTickets || [];
       const today = startOfDay(new Date());
