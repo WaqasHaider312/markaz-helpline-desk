@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2, Clock, CheckCircle, AlertCircle, BarChart3, User } from 'lucide-react';
 import { format, subDays, startOfDay } from 'date-fns';
 import { toast } from 'sonner';
+import { useTickets } from '@/contexts/TicketsContext';
 import {
   Select,
   SelectContent,
@@ -51,6 +52,7 @@ interface HourlyData {
 const Dashboard = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const { tickets: contextTickets } = useTickets(); // Add this
   const [stats, setStats] = useState<Stats>({
     total: 0,
     pending: 0,
