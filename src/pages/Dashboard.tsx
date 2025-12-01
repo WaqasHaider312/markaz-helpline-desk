@@ -206,130 +206,112 @@ const Dashboard = () => {
   };
 
   const fetchDashboardData = async () => {
-    if (!profile) return;
+  if (!profile) return;
 
-    setLoading(true);
-    try {
-      let allTickets: any[] = [];
-let from = 0;
-const pageSize = 1000;
+  setLoading(true);
+  try {
+    // Use already-loaded tickets from context
+    const tickets = contextTickets;
+    const today = startOfDay(new Date());
 
-while (true) {
-  const { data, error } = await supabase
-    .from('tickets')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .range(from, from + pageSize - 1);
+    setCachedTickets(tickets);
 
-  if (error) throw error;
-  if (!data || data.length === 0) break;
-  
-  allTickets = [...allTickets, ...data];
-  if (data.length < pageSize) break;
-  from += pageSize;
-}
+    const newStats: Stats = {
+      total: tickets.length,
+      pending: tickets.filter((t) => t.status === 'Pending').length,
+      inProgress: tickets.filter((t) => t.status === 'In Progress').length,
+      resolved: tickets.filter((t) => t.status === 'Resolved').length,
+      myTickets: tickets.filter((t) => t.assigned_agent_id === profile.id && t.status !== 'Resolved').length,
+      resolvedToday: tickets.filter(
+        (t) => t.status === 'Resolved' && new Date(t.updated_at) >= today
+      ).length,
+    };
+    setStats(newStats);
 
-      const tickets = allTickets || [];
-      const today = startOfDay(new Date());
+    const { data: messages } = await supabase
+      .from('messages')
+      .select('ticket_id, sender_type, created_at')
+      .order('created_at', { ascending: true });
 
-      setCachedTickets(tickets);
+    setCachedMessages(messages || []);
 
-      const newStats: Stats = {
-        total: tickets.length,
-        pending: tickets.filter((t) => t.status === 'Pending').length,
-        inProgress: tickets.filter((t) => t.status === 'In Progress').length,
-        resolved: tickets.filter((t) => t.status === 'Resolved').length,
-        myTickets: tickets.filter((t) => t.assigned_agent_id === profile.id && t.status !== 'Resolved').length,
-        resolvedToday: tickets.filter(
-          (t) => t.status === 'Resolved' && new Date(t.updated_at) >= today
-        ).length,
-      };
-      setStats(newStats);
-
-      const { data: messages } = await supabase
-        .from('messages')
-        .select('ticket_id, sender_type, created_at')
-        .order('created_at', { ascending: true });
-
-      setCachedMessages(messages || []);
-
-      const firstResponseTimes: number[] = [];
-      const messageResponseTimes: number[] = [];
+    const firstResponseTimes: number[] = [];
+    const messageResponseTimes: number[] = [];
+    
+    tickets.forEach(ticket => {
+      const ticketMessages = messages?.filter(m => m.ticket_id === ticket.id) || [];
+      const firstAgentMessage = ticketMessages.find(m => m.sender_type === 'agent');
       
-      tickets.forEach(ticket => {
-        const ticketMessages = messages?.filter(m => m.ticket_id === ticket.id) || [];
-        const firstAgentMessage = ticketMessages.find(m => m.sender_type === 'agent');
-        
-        if (firstAgentMessage) {
-          const responseTime = (new Date(firstAgentMessage.created_at).getTime() - new Date(ticket.created_at).getTime()) / (1000 * 60);
-          firstResponseTimes.push(responseTime);
-        }
-
-        for (let i = 0; i < ticketMessages.length - 1; i++) {
-          if (ticketMessages[i].sender_type === 'reseller' && ticketMessages[i + 1].sender_type === 'agent') {
-            const responseTime = (new Date(ticketMessages[i + 1].created_at).getTime() - new Date(ticketMessages[i].created_at).getTime()) / (1000 * 60);
-            messageResponseTimes.push(responseTime);
-          }
-        }
-      });
-
-      const resolvedTickets = tickets.filter(t => t.status === 'Resolved');
-      const resolutionTimes = resolvedTickets.map(t => 
-        (new Date(t.updated_at).getTime() - new Date(t.created_at).getTime()) / (1000 * 60)
-      );
-
-      setResponseMetrics({
-        avgFirstResponse: firstResponseTimes.length > 0 
-          ? formatDuration(firstResponseTimes.reduce((a, b) => a + b, 0) / firstResponseTimes.length)
-          : '0m',
-        avgMessageResponse: messageResponseTimes.length > 0
-          ? formatDuration(messageResponseTimes.reduce((a, b) => a + b, 0) / messageResponseTimes.length)
-          : '0m',
-        avgResolution: resolutionTimes.length > 0
-          ? formatDuration(resolutionTimes.reduce((a, b) => a + b, 0) / resolutionTimes.length)
-          : '0m',
-      });
-
-      fetchIssueCategories(tickets, messages || []);
-      await fetchAgentPerformance(tickets, messages || []);
-      fetchVolumeTrend(tickets);
-
-      const hourlyMap = new Map<number, { created: number; resolved: number }>();
-      for (let i = 0; i < 24; i++) {
-        hourlyMap.set(i, { created: 0, resolved: 0 });
+      if (firstAgentMessage) {
+        const responseTime = (new Date(firstAgentMessage.created_at).getTime() - new Date(ticket.created_at).getTime()) / (1000 * 60);
+        firstResponseTimes.push(responseTime);
       }
 
-      tickets.forEach(t => {
-        const createdHour = new Date(t.created_at).getHours();
-        if (new Date(t.created_at) >= today) {
-          const data = hourlyMap.get(createdHour)!;
-          data.created++;
-          hourlyMap.set(createdHour, data);
+      for (let i = 0; i < ticketMessages.length - 1; i++) {
+        if (ticketMessages[i].sender_type === 'reseller' && ticketMessages[i + 1].sender_type === 'agent') {
+          const responseTime = (new Date(ticketMessages[i + 1].created_at).getTime() - new Date(ticketMessages[i].created_at).getTime()) / (1000 * 60);
+          messageResponseTimes.push(responseTime);
         }
+      }
+    });
 
-        if (t.status === 'Resolved' && new Date(t.updated_at) >= today) {
-          const resolvedHour = new Date(t.updated_at).getHours();
-          const data = hourlyMap.get(resolvedHour)!;
-          data.resolved++;
-          hourlyMap.set(resolvedHour, data);
-        }
-      });
+    const resolvedTickets = tickets.filter(t => t.status === 'Resolved');
+    const resolutionTimes = resolvedTickets.map(t => 
+      (new Date(t.updated_at).getTime() - new Date(t.created_at).getTime()) / (1000 * 60)
+    );
 
-      const hourlyArray: HourlyData[] = Array.from(hourlyMap.entries()).map(([hour, data]) => ({
-        hour: `${hour.toString().padStart(2, '0')}:00`,
-        created: data.created,
-        resolved: data.resolved,
-      }));
+    setResponseMetrics({
+      avgFirstResponse: firstResponseTimes.length > 0 
+        ? formatDuration(firstResponseTimes.reduce((a, b) => a + b, 0) / firstResponseTimes.length)
+        : '0m',
+      avgMessageResponse: messageResponseTimes.length > 0
+        ? formatDuration(messageResponseTimes.reduce((a, b) => a + b, 0) / messageResponseTimes.length)
+        : '0m',
+      avgResolution: resolutionTimes.length > 0
+        ? formatDuration(resolutionTimes.reduce((a, b) => a + b, 0) / resolutionTimes.length)
+        : '0m',
+    });
 
-      setHourlyData(hourlyArray);
+    fetchIssueCategories(tickets, messages || []);
+    await fetchAgentPerformance(tickets, messages || []);
+    fetchVolumeTrend(tickets);
 
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-      toast.error('Failed to load dashboard data');
-    } finally {
-      setLoading(false);
+    const hourlyMap = new Map<number, { created: number; resolved: number }>();
+    for (let i = 0; i < 24; i++) {
+      hourlyMap.set(i, { created: 0, resolved: 0 });
     }
-  };
+
+    tickets.forEach(t => {
+      const createdHour = new Date(t.created_at).getHours();
+      if (new Date(t.created_at) >= today) {
+        const data = hourlyMap.get(createdHour)!;
+        data.created++;
+        hourlyMap.set(createdHour, data);
+      }
+
+      if (t.status === 'Resolved' && new Date(t.updated_at) >= today) {
+        const resolvedHour = new Date(t.updated_at).getHours();
+        const data = hourlyMap.get(resolvedHour)!;
+        data.resolved++;
+        hourlyMap.set(resolvedHour, data);
+      }
+    });
+
+    const hourlyArray: HourlyData[] = Array.from(hourlyMap.entries()).map(([hour, data]) => ({
+      hour: `${hour.toString().padStart(2, '0')}:00`,
+      created: data.created,
+      resolved: data.resolved,
+    }));
+
+    setHourlyData(hourlyArray);
+
+  } catch (error) {
+    console.error('Error fetching dashboard data:', error);
+    toast.error('Failed to load dashboard data');
+  } finally {
+    setLoading(false);
+  }
+};
 
   if (loading) {
     return (
