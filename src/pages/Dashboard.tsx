@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2, Clock, CheckCircle, AlertCircle, BarChart3, User } from 'lucide-react';
 import { format, subDays, startOfDay } from 'date-fns';
 import { toast } from 'sonner';
-import { useTickets } from '@/contexts/TicketsContext';
 import {
   Select,
   SelectContent,
@@ -52,7 +51,6 @@ interface HourlyData {
 const Dashboard = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const { tickets: contextTickets } = useTickets(); // Add this
   const [stats, setStats] = useState<Stats>({
     total: 0,
     pending: 0,
@@ -206,112 +204,149 @@ const Dashboard = () => {
   };
 
   const fetchDashboardData = async () => {
-  if (!profile) return;
+    if (!profile) return;
 
-  setLoading(true);
-  try {
-    // Use already-loaded tickets from context
-    const tickets = contextTickets;
-    const today = startOfDay(new Date());
+    setLoading(true);
+    try {
+      // Load first 1000 fast
+      const { data: firstBatch, error: firstError } = await supabase
+        .from('tickets')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(0, 999);
 
-    setCachedTickets(tickets);
+      if (firstError) throw firstError;
 
-    const newStats: Stats = {
-      total: tickets.length,
-      pending: tickets.filter((t) => t.status === 'Pending').length,
-      inProgress: tickets.filter((t) => t.status === 'In Progress').length,
-      resolved: tickets.filter((t) => t.status === 'Resolved').length,
-      myTickets: tickets.filter((t) => t.assigned_agent_id === profile.id && t.status !== 'Resolved').length,
-      resolvedToday: tickets.filter(
-        (t) => t.status === 'Resolved' && new Date(t.updated_at) >= today
-      ).length,
-    };
-    setStats(newStats);
+      let allTickets = firstBatch || [];
+      const today = startOfDay(new Date());
 
-    const { data: messages } = await supabase
-      .from('messages')
-      .select('ticket_id, sender_type, created_at')
-      .order('created_at', { ascending: true });
+      // Show stats with first batch immediately
+      setCachedTickets(allTickets);
+      setStats({
+        total: allTickets.length,
+        pending: allTickets.filter((t) => t.status === 'Pending').length,
+        inProgress: allTickets.filter((t) => t.status === 'In Progress').length,
+        resolved: allTickets.filter((t) => t.status === 'Resolved').length,
+        myTickets: allTickets.filter((t) => t.assigned_agent_id === profile.id && t.status !== 'Resolved').length,
+        resolvedToday: allTickets.filter((t) => t.status === 'Resolved' && new Date(t.updated_at) >= today).length,
+      });
 
-    setCachedMessages(messages || []);
+      // Fetch messages
+      const { data: messages } = await supabase
+        .from('messages')
+        .select('ticket_id, sender_type, created_at')
+        .order('created_at', { ascending: true });
 
-    const firstResponseTimes: number[] = [];
-    const messageResponseTimes: number[] = [];
-    
-    tickets.forEach(ticket => {
-      const ticketMessages = messages?.filter(m => m.ticket_id === ticket.id) || [];
-      const firstAgentMessage = ticketMessages.find(m => m.sender_type === 'agent');
+      setCachedMessages(messages || []);
+
+      // Calculate metrics with first batch
+      const firstResponseTimes: number[] = [];
+      const messageResponseTimes: number[] = [];
       
-      if (firstAgentMessage) {
-        const responseTime = (new Date(firstAgentMessage.created_at).getTime() - new Date(ticket.created_at).getTime()) / (1000 * 60);
-        firstResponseTimes.push(responseTime);
-      }
-
-      for (let i = 0; i < ticketMessages.length - 1; i++) {
-        if (ticketMessages[i].sender_type === 'reseller' && ticketMessages[i + 1].sender_type === 'agent') {
-          const responseTime = (new Date(ticketMessages[i + 1].created_at).getTime() - new Date(ticketMessages[i].created_at).getTime()) / (1000 * 60);
-          messageResponseTimes.push(responseTime);
+      allTickets.forEach(ticket => {
+        const ticketMessages = messages?.filter(m => m.ticket_id === ticket.id) || [];
+        const firstAgentMessage = ticketMessages.find(m => m.sender_type === 'agent');
+        
+        if (firstAgentMessage) {
+          const responseTime = (new Date(firstAgentMessage.created_at).getTime() - new Date(ticket.created_at).getTime()) / (1000 * 60);
+          firstResponseTimes.push(responseTime);
         }
+
+        for (let i = 0; i < ticketMessages.length - 1; i++) {
+          if (ticketMessages[i].sender_type === 'reseller' && ticketMessages[i + 1].sender_type === 'agent') {
+            const responseTime = (new Date(ticketMessages[i + 1].created_at).getTime() - new Date(ticketMessages[i].created_at).getTime()) / (1000 * 60);
+            messageResponseTimes.push(responseTime);
+          }
+        }
+      });
+
+      const resolvedTickets = allTickets.filter(t => t.status === 'Resolved');
+      const resolutionTimes = resolvedTickets.map(t => 
+        (new Date(t.updated_at).getTime() - new Date(t.created_at).getTime()) / (1000 * 60)
+      );
+
+      setResponseMetrics({
+        avgFirstResponse: firstResponseTimes.length > 0 
+          ? formatDuration(firstResponseTimes.reduce((a, b) => a + b, 0) / firstResponseTimes.length)
+          : '0m',
+        avgMessageResponse: messageResponseTimes.length > 0
+          ? formatDuration(messageResponseTimes.reduce((a, b) => a + b, 0) / messageResponseTimes.length)
+          : '0m',
+        avgResolution: resolutionTimes.length > 0
+          ? formatDuration(resolutionTimes.reduce((a, b) => a + b, 0) / resolutionTimes.length)
+          : '0m',
+      });
+
+      fetchIssueCategories(allTickets, messages || []);
+      await fetchAgentPerformance(allTickets, messages || []);
+      fetchVolumeTrend(allTickets);
+
+      const hourlyMap = new Map<number, { created: number; resolved: number }>();
+      for (let i = 0; i < 24; i++) {
+        hourlyMap.set(i, { created: 0, resolved: 0 });
       }
-    });
 
-    const resolvedTickets = tickets.filter(t => t.status === 'Resolved');
-    const resolutionTimes = resolvedTickets.map(t => 
-      (new Date(t.updated_at).getTime() - new Date(t.created_at).getTime()) / (1000 * 60)
-    );
+      allTickets.forEach(t => {
+        const createdHour = new Date(t.created_at).getHours();
+        if (new Date(t.created_at) >= today) {
+          const data = hourlyMap.get(createdHour)!;
+          data.created++;
+          hourlyMap.set(createdHour, data);
+        }
 
-    setResponseMetrics({
-      avgFirstResponse: firstResponseTimes.length > 0 
-        ? formatDuration(firstResponseTimes.reduce((a, b) => a + b, 0) / firstResponseTimes.length)
-        : '0m',
-      avgMessageResponse: messageResponseTimes.length > 0
-        ? formatDuration(messageResponseTimes.reduce((a, b) => a + b, 0) / messageResponseTimes.length)
-        : '0m',
-      avgResolution: resolutionTimes.length > 0
-        ? formatDuration(resolutionTimes.reduce((a, b) => a + b, 0) / resolutionTimes.length)
-        : '0m',
-    });
+        if (t.status === 'Resolved' && new Date(t.updated_at) >= today) {
+          const resolvedHour = new Date(t.updated_at).getHours();
+          const data = hourlyMap.get(resolvedHour)!;
+          data.resolved++;
+          hourlyMap.set(resolvedHour, data);
+        }
+      });
 
-    fetchIssueCategories(tickets, messages || []);
-    await fetchAgentPerformance(tickets, messages || []);
-    fetchVolumeTrend(tickets);
+      const hourlyArray: HourlyData[] = Array.from(hourlyMap.entries()).map(([hour, data]) => ({
+        hour: `${hour.toString().padStart(2, '0')}:00`,
+        created: data.created,
+        resolved: data.resolved,
+      }));
 
-    const hourlyMap = new Map<number, { created: number; resolved: number }>();
-    for (let i = 0; i < 24; i++) {
-      hourlyMap.set(i, { created: 0, resolved: 0 });
+      setHourlyData(hourlyArray);
+
+      // Load rest in background
+      let from = 1000;
+      const pageSize = 1000;
+
+      while (true) {
+        const { data, error } = await supabase
+          .from('tickets')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(from, from + pageSize - 1);
+
+        if (error || !data || data.length === 0) break;
+        
+        allTickets = [...allTickets, ...data];
+        
+        // Update stats progressively
+        setCachedTickets(allTickets);
+        setStats({
+          total: allTickets.length,
+          pending: allTickets.filter((t) => t.status === 'Pending').length,
+          inProgress: allTickets.filter((t) => t.status === 'In Progress').length,
+          resolved: allTickets.filter((t) => t.status === 'Resolved').length,
+          myTickets: allTickets.filter((t) => t.assigned_agent_id === profile.id && t.status !== 'Resolved').length,
+          resolvedToday: allTickets.filter((t) => t.status === 'Resolved' && new Date(t.updated_at) >= today).length,
+        });
+        
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      toast.error('Failed to load dashboard data');
+    } finally {
+      setLoading(false);
     }
-
-    tickets.forEach(t => {
-      const createdHour = new Date(t.created_at).getHours();
-      if (new Date(t.created_at) >= today) {
-        const data = hourlyMap.get(createdHour)!;
-        data.created++;
-        hourlyMap.set(createdHour, data);
-      }
-
-      if (t.status === 'Resolved' && new Date(t.updated_at) >= today) {
-        const resolvedHour = new Date(t.updated_at).getHours();
-        const data = hourlyMap.get(resolvedHour)!;
-        data.resolved++;
-        hourlyMap.set(resolvedHour, data);
-      }
-    });
-
-    const hourlyArray: HourlyData[] = Array.from(hourlyMap.entries()).map(([hour, data]) => ({
-      hour: `${hour.toString().padStart(2, '0')}:00`,
-      created: data.created,
-      resolved: data.resolved,
-    }));
-
-    setHourlyData(hourlyArray);
-
-  } catch (error) {
-    console.error('Error fetching dashboard data:', error);
-    toast.error('Failed to load dashboard data');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   if (loading) {
     return (
@@ -337,7 +372,6 @@ const Dashboard = () => {
 
       <div className="flex-1 p-6 overflow-y-auto">
         <div className="max-w-7xl mx-auto space-y-6">
-          {/* Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="bg-white border border-gray-200 rounded-lg p-6">
               <div className="flex items-center justify-between">
@@ -412,7 +446,6 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Response Metrics */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white border border-gray-200 rounded-lg p-6">
               <p className="text-sm text-muted-foreground mb-2">Avg First Response</p>
@@ -428,9 +461,7 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Side by side: Today's Activity and Volume Trend */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Today's Activity */}
             <div className="bg-white border border-gray-200 rounded-lg p-6">
               <h2 className="text-lg font-semibold text-foreground mb-4">Today's Activity</h2>
               <div className="h-64 flex items-end gap-2">
@@ -475,7 +506,6 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Volume Trend */}
             <div className="bg-white border border-gray-200 rounded-lg p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-foreground">Ticket Volume Trend</h2>
@@ -508,9 +538,7 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Side by side: Issue Categories and Agent Performance */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Issue Categories */}
             <div className="bg-white border border-gray-200 rounded-lg p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-foreground">Issue Categories</h2>
@@ -548,7 +576,6 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Agent Performance */}
             <div className="bg-white border border-gray-200 rounded-lg p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-foreground">Agent Performance</h2>
