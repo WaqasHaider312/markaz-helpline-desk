@@ -26,13 +26,26 @@ export const TicketsProvider = ({ children }: { children: ReactNode }) => {
     if (!profile) return;
 
     try {
-      const { data, error } = await supabase
-        .from('tickets')
-        .select('*, agent_profiles!assigned_agent_id(full_name)')
-        .order('created_at', { ascending: false });
+      let allTickets: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
 
-      if (error) throw error;
-      setTickets(data || []);
+      while (true) {
+        const { data, error } = await supabase
+          .from('tickets')
+          .select('*, agent_profiles!assigned_agent_id(full_name)')
+          .order('created_at', { ascending: false })
+          .range(from, from + pageSize - 1);
+
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        
+        allTickets = [...allTickets, ...data];
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+
+      setTickets(allTickets);
     } catch (error) {
       console.error('Error fetching tickets:', error);
     }
