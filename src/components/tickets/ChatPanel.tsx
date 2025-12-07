@@ -796,7 +796,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo, onSelectTicket }: ChatPan
               onClick={loadResellerTickets}
               className="text-xs text-primary hover:text-primary hover:bg-blue-50"
             >
-              All Tickets ({tickets.filter(t => t.reseller_phone === ticket?.reseller_phone).length})
+              All Tickets ({resellerTicketCount})
             </Button>
           </div>
           <Button variant="ghost" size="icon" onClick={onToggleInfo}>
