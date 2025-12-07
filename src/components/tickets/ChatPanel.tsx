@@ -1140,7 +1140,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo, onSelectTicket }: ChatPan
                 }}
                   rows={1}
                   className="flex-1 resize-none min-h-[40px] max-h-[200px] rounded-lg border-gray-300"
-                  maxLength={800}
+                  maxLength={1000}
                   style={{ height: 'auto', minHeight: '40px', maxHeight: '200px' }}
                   onInput={(e) => {
                     const target = e.target as HTMLTextAreaElement;
@@ -1163,7 +1163,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo, onSelectTicket }: ChatPan
               </div>
 
               <div className="flex justify-between items-center mt-2 text-xs text-gray-400">
-                <span>{replyText.length}/800</span>
+                <span>{replyText.length}/1000</span>
                 <span>Use / for quick replies • Paste screenshots • Drag & drop files</span>
               </div>
             </>
@@ -1204,7 +1204,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo, onSelectTicket }: ChatPan
                   onChange={(e) => setNoteText(e.target.value)}
                   rows={1}
                   className="flex-1 resize-none min-h-[40px] max-h-[200px] rounded-lg bg-yellow-50 border-yellow-300"
-                  maxLength={800}
+                  maxLength={1000}
                   style={{ height: 'auto', minHeight: '40px', maxHeight: '200px' }}
                   onInput={(e) => {
                     const target = e.target as HTMLTextAreaElement;
@@ -1228,7 +1228,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo, onSelectTicket }: ChatPan
 
               <div className="flex justify-between items-center mt-2 text-xs text-gray-400">
                 <span>🔒 Only visible to agents</span>
-                <span>{noteText.length}/800</span>
+                <span>{noteText.length}/1000</span>
               </div>
             </>
           )}
