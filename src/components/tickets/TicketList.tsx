@@ -49,6 +49,8 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
   const [autoLoadCount, setAutoLoadCount] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [searchResults, setSearchResults] = useState<Ticket[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
     fetchAgents();
@@ -57,7 +59,13 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
   const filteredTickets = useMemo(() => {
   if (!profile) return [];
 
+  // Use search results if searching
+  if (searchQuery.trim()) {
+    return searchResults;
+  }
+
   let filtered = [...allTickets];
+  // ... rest of existing code stays the same
 
   if (searchQuery) {
     filtered = filtered.filter(t => 
@@ -161,6 +169,33 @@ useEffect(() => {
       console.error('Error fetching agents:', error);
     }
   };
+
+
+  const searchDatabase = async (query: string) => {
+  if (!query.trim()) {
+    setSearchResults([]);
+    setIsSearching(false);
+    return;
+  }
+
+  setIsSearching(true);
+  try {
+    const { data, error } = await supabase
+      .from('tickets')
+      .select('*, agent_profiles!assigned_agent_id(full_name)')
+      .or(`ticket_number.ilike.%${query}%,reseller_phone.ilike.%${query}%,order_id.ilike.%${query}%,reseller_name.ilike.%${query}%`)
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (error) throw error;
+    setSearchResults(data || []);
+  } catch (error) {
+    console.error('Error searching:', error);
+    setSearchResults([]);
+  } finally {
+    setIsSearching(false);
+  }
+};
 
   const handleTicketCheckbox = (ticketId: string) => {
     const newSelected = new Set(selectedTickets);
@@ -356,7 +391,10 @@ useEffect(() => {
             ref={searchInputRef}
             placeholder="Search tickets..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              searchDatabase(e.target.value);
+            }}
             className="mb-3"
           />
         )}

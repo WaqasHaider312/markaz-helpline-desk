@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { useTickets } from '@/contexts/TicketsContext';
 import { useMemo } from 'react'; // Add to existing React import
+import { useEffect, useState, useMemo } from 'react';
 
 
 interface SidebarProps {
@@ -50,14 +51,42 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
   };
 }, [tickets, profile]);
  
+useEffect(() => {
+  const fetchDbCounts = async () => {
+    try {
+      const { count: totalCount } = await supabase
+        .from('tickets')
+        .select('*', { count: 'exact', head: true });
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const { count: resolvedTodayCount } = await supabase
+        .from('tickets')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'Resolved')
+        .gte('updated_at', today.toISOString());
+
+      setDbCounts({
+        allTickets: totalCount || 0,
+        allResolvedToday: resolvedTodayCount || 0
+      });
+    } catch (error) {
+      console.error('Error fetching counts:', error);
+    }
+  };
+
+  fetchDbCounts();
+}, [tickets]);
+
 
   const views = [
     { id: 'my-open' as ViewType, label: 'My Open Tickets', icon: Inbox, count: counts.myOpen },
     { id: 'unassigned' as ViewType, label: 'Unassigned Tickets', icon: UserX, count: counts.unassigned },
     { id: 'all-assigned' as ViewType, label: 'All Assigned', icon: Users, count: counts.allAssigned },
     { id: 'my-resolved-today' as ViewType, label: 'My Resolved Today', icon: CheckCircle, count: counts.myResolvedToday },
-    { id: 'all-resolved-today' as ViewType, label: 'All Resolved Today', icon: CheckCircle, count: counts.allResolvedToday },
-    { id: 'all-tickets' as ViewType, label: 'All Tickets Ever', icon: Clock, count: tickets.length }, // Add this
+    { id: 'all-resolved-today' as ViewType, label: 'All Resolved Today', icon: CheckCircle, count: dbCounts.allResolvedToday },
+    { id: 'all-tickets' as ViewType, label: 'All Tickets Ever', icon: Clock, count: dbCounts.allTickets },
   ];
 
   const menuItems = [
@@ -74,6 +103,11 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
       .toUpperCase()
       .slice(0, 2);
   };
+
+  const [dbCounts, setDbCounts] = useState({
+  allTickets: 0,
+  allResolvedToday: 0
+  });
 
   return (
     <div className={`bg-white border-r border-gray-200 flex flex-col h-full transition-all duration-300 ${isCollapsed ? 'w-16' : 'w-60'}`}>

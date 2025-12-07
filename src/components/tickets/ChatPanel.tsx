@@ -224,22 +224,31 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo, onSelectTicket }: ChatPan
     }
   };
 
-    const loadResellerTickets = () => {
-    if (!ticket) return;
+  const loadResellerTickets = async () => {
+  if (!ticket) return;
+  
+  if (!previousTicketId) {
+    setPreviousTicketId(ticketId);
+  }
+  
+  try {
+    const { data, error } = await supabase
+      .from('tickets')
+      .select('*')
+      .eq('reseller_phone', ticket.reseller_phone)
+      .order('created_at', { ascending: false });
     
-    // Only store if not already set (preserve original ticket)
-    if (!previousTicketId) {
-      setPreviousTicketId(ticketId);
-    }
+    if (error) throw error;
     
-    const filtered = tickets.filter(t => t.reseller_phone === ticket.reseller_phone)
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    
-    setResellerTickets(filtered);
-    setResellerTicketsDisplay(filtered.slice(0, 5));
+    setResellerTickets(data || []);
+    setResellerTicketsDisplay((data || []).slice(0, 5));
     setResellerTicketsOffset(5);
     setShowResellerTicketsModal(true);
-  };
+  } catch (error) {
+    console.error('Error loading reseller tickets:', error);
+    toast.error('Failed to load tickets');
+  }
+};
 
   const loadMoreResellerTickets = () => {
     const nextBatch = resellerTickets.slice(0, resellerTicketsOffset + 5);
@@ -745,7 +754,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo, onSelectTicket }: ChatPan
               onClick={loadResellerTickets}
               className="text-xs text-primary hover:text-primary hover:bg-blue-50"
             >
-              All Tickets ({tickets.filter(t => t.reseller_phone === ticket?.reseller_phone).length})
+              All Tickets
             </Button>
           </div>
           <Button variant="ghost" size="icon" onClick={onToggleInfo}>
