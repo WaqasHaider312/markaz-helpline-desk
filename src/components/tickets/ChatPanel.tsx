@@ -528,7 +528,6 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo, onSelectTicket }: ChatPan
 
         if (!updateError) {
           setTicket(prev => prev ? {...prev, ...updates} : null);
-          await refreshTickets();
         }
         
         if (updates.assigned_agent_id) {
@@ -543,7 +542,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo, onSelectTicket }: ChatPan
 
       // Check if approval popup needed after sending reply
       if (ticket?.reseller_id) {
-        await checkApprovalNeeded(ticket.reseller_id);
+        checkApprovalNeeded(ticket.reseller_id); // No await
       }
 
       setReplyText('');
