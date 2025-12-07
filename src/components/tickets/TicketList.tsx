@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, Ticket } from '@/lib/supabase';
 import { ViewType } from '@/pages/Tickets';
@@ -51,6 +51,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [searchResults, setSearchResults] = useState<Ticket[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
     fetchAgents();
@@ -393,7 +394,16 @@ useEffect(() => {
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
-              searchDatabase(e.target.value);
+              
+              // Clear previous timeout
+              if (searchTimeoutRef.current) {
+                clearTimeout(searchTimeoutRef.current);
+              }
+              
+              // Debounce search by 500ms
+              searchTimeoutRef.current = setTimeout(() => {
+                searchDatabase(e.target.value);
+              }, 500);
             }}
             className="mb-3"
           />

@@ -114,7 +114,13 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo, onSelectTicket }: ChatPan
   useEffect(() => {
     if (ticketId) {
       const currentTicket = tickets.find(t => t.id === ticketId);
-      setTicket(currentTicket || null);
+      
+      if (currentTicket) {
+        setTicket(currentTicket);
+      } else {
+        // Ticket not in loaded tickets, fetch from database
+        fetchSingleTicket(ticketId);
+      }
       
       fetchTicketData();
       fetchCannedMessages();
@@ -206,6 +212,21 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo, onSelectTicket }: ChatPan
       setInternalNotes(notesData || []);
     } catch (error) {
       console.error('Error fetching ticket data:', error);
+    }
+  };
+
+  const fetchSingleTicket = async (ticketId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('tickets')
+        .select('*, agent_profiles!assigned_agent_id(full_name)')
+        .eq('id', ticketId)
+        .single();
+      
+      if (error) throw error;
+      setTicket(data);
+    } catch (error) {
+      console.error('Error fetching ticket:', error);
     }
   };
 

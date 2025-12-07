@@ -54,11 +54,14 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
   useEffect(() => {
     if (ticketId) {
       const currentTicket = tickets.find(t => t.id === ticketId);
-      setTicket(currentTicket || null);
       fetchAgents();
       
       if (currentTicket) {
+        setTicket(currentTicket);
         fetchResellerStats(currentTicket.reseller_id);
+      } else {
+        // Ticket not in loaded tickets, fetch from database
+        fetchSingleTicket(ticketId);
       }
     }
   }, [ticketId, tickets]);
@@ -162,6 +165,25 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
       setAgents(data || []);
     } catch (error) {
       console.error('Error fetching agents:', error);
+    }
+  };
+
+  const fetchSingleTicket = async (ticketId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('tickets')
+        .select('*, agent_profiles!assigned_agent_id(full_name)')
+        .eq('id', ticketId)
+        .single();
+      
+      if (error) throw error;
+      setTicket(data);
+      
+      if (data) {
+        fetchResellerStats(data.reseller_id);
+      }
+    } catch (error) {
+      console.error('Error fetching ticket:', error);
     }
   };
 
