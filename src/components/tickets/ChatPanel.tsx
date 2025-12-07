@@ -503,6 +503,9 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo, onSelectTicket }: ChatPan
 
       if (error) throw error;
 
+      // Immediately add message to state
+      setMessages(prev => [...prev, data]);
+
       await supabase
         .from('tickets')
         .update({
@@ -528,6 +531,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo, onSelectTicket }: ChatPan
 
         if (!updateError) {
           setTicket(prev => prev ? {...prev, ...updates} : null);
+          refreshTickets(); // No await - runs in background
         }
         
         if (updates.assigned_agent_id) {
