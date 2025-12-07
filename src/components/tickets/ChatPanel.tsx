@@ -104,6 +104,7 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo, onSelectTicket }: ChatPan
   const [resellerTicketsOffset, setResellerTicketsOffset] = useState(5);
   const [previousTicketId, setPreviousTicketId] = useState<string | null>(null);
   const [selectedCannedIndex, setSelectedCannedIndex] = useState(0);
+  const [resellerTicketCount, setResellerTicketCount] = useState(0);
   const [approvalData, setApprovalData] = useState<{
     resellerName: string;
     resellerId: string;
@@ -276,6 +277,23 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo, onSelectTicket }: ChatPan
     setResellerTicketsDisplay(nextBatch);
     setResellerTicketsOffset(prev => prev + 5);
   };
+
+  useEffect(() => {
+  const fetchResellerCount = async () => {
+    if (!ticket?.reseller_phone) return;
+    
+    const { count, error } = await supabase
+      .from('tickets')
+      .select('*', { count: 'exact', head: true })
+      .eq('reseller_phone', ticket.reseller_phone);
+    
+    if (!error) {
+      setResellerTicketCount(count || 0);
+    }
+  };
+  
+  fetchResellerCount();
+}, [ticket?.reseller_phone]);
 
   const subscribeToUpdates = () => {
     if (channelRef.current) {

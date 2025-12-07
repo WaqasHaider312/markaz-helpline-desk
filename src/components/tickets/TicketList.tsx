@@ -117,7 +117,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
   };
 
   return [...sortGroup(needsReply), ...sortGroup(alreadyReplied)];
-}, [allTickets, currentView, profile, topicFilter, statusFilter, searchQuery, sortBy]);
+}, [allTickets, currentView, profile, topicFilter, statusFilter, searchQuery, sortBy, searchResults]);
 
 useEffect(() => {
   setDisplayedTickets(filteredTickets.slice(0, displayCount));
