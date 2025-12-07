@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useKeyboardShortcuts } from './KeyboardShortcuts';
 import { useTickets } from '@/contexts/TicketsContext';
+import { useMemo } from 'react'; // Add to existing React import
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,7 +34,6 @@ const getInitials = (name: string) => {
 const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpen, onTicketsLoad }: TicketListProps) => {
   const { profile } = useAuth();
   const { tickets: allTickets } = useTickets();
-  const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);
   const [displayedTickets, setDisplayedTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -54,75 +54,69 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
     fetchAgents();
   }, []);
 
-  useEffect(() => {
-    if (!profile) return;
+  const filteredTickets = useMemo(() => {
+  if (!profile) return [];
 
-    let filtered = [...allTickets];
+  let filtered = [...allTickets];
 
-    // If searching, search ALL tickets and skip view filter
-    if (searchQuery) {
-      filtered = filtered.filter(t => 
-        t.ticket_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.reseller_phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.order_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.reseller_name?.toLowerCase().includes(searchQuery.toLowerCase())
+  if (searchQuery) {
+    filtered = filtered.filter(t => 
+      t.ticket_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.reseller_phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.order_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.reseller_name?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  } else {
+    if (currentView === 'my-open') {
+      filtered = filtered.filter(t => t.assigned_agent_id === profile.id && t.status !== 'Resolved');
+    } else if (currentView === 'all-assigned') {
+      filtered = filtered.filter(t => t.status !== 'Resolved' && t.assigned_agent_id !== null);
+    } else if (currentView === 'unassigned') {
+      filtered = filtered.filter(t => t.assigned_agent_id === null && t.status !== 'Resolved');
+    } else if (currentView === 'my-resolved-today') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      filtered = filtered.filter(t => (t as any).resolved_by === profile.id && t.status === 'Resolved' && new Date(t.updated_at) >= today);
+    } else if (currentView === 'all-resolved-today') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      filtered = filtered.filter(t => t.status === 'Resolved' && new Date(t.updated_at) >= today);
+    }
+  }
+
+  if (topicFilter !== 'All Topics') {
+    filtered = filtered.filter(t => t.issue_type === topicFilter);
+  }
+  if (statusFilter !== 'All') {
+    filtered = filtered.filter(t => t.status === statusFilter);
+  }
+
+  const needsReply = filtered.filter(t => !t.latest_message_sender || t.latest_message_sender === 'reseller');
+  const alreadyReplied = filtered.filter(t => t.latest_message_sender === 'agent');
+
+  const sortGroup = (tickets: Ticket[]) => {
+    if (sortBy === 'unread') {
+      return tickets.filter(t => t.unread_by_agent).sort((a, b) => 
+        new Date(b.latest_message_at || b.created_at).getTime() - new Date(a.latest_message_at || a.created_at).getTime()
       );
-    } else {
-      // Only apply view filter when NOT searching
-      if (currentView === 'my-open') {
-        filtered = filtered.filter(t => t.assigned_agent_id === profile.id && t.status !== 'Resolved');
-      } else if (currentView === 'all-assigned') {
-        filtered = filtered.filter(t => t.status !== 'Resolved' && t.assigned_agent_id !== null);
-      } else if (currentView === 'unassigned') {
-        filtered = filtered.filter(t => t.assigned_agent_id === null && t.status !== 'Resolved');
-      } else if (currentView === 'my-resolved-today') {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        filtered = filtered.filter(t => (t as any).resolved_by === profile.id && t.status === 'Resolved' && new Date(t.updated_at) >= today);
-      } else if (currentView === 'all-resolved-today') {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        filtered = filtered.filter(t => t.status === 'Resolved' && new Date(t.updated_at) >= today);
-      } else if (currentView === 'all-tickets') {
-        // Show all tickets - no filtering
-      }
+    } else if (sortBy === 'newest') {
+      return tickets.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    } else if (sortBy === 'oldest' || sortBy === 'longest-wait') {
+      return tickets.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
     }
+    return tickets;
+  };
 
-    // Apply topic and status filters (these work with search too)
-    if (topicFilter !== 'All Topics') {
-      filtered = filtered.filter(t => t.issue_type === topicFilter);
-    }
-    if (statusFilter !== 'All') {
-      filtered = filtered.filter(t => t.status === statusFilter);
-    }
-  
+  return [...sortGroup(needsReply), ...sortGroup(alreadyReplied)];
+}, [allTickets, currentView, profile, topicFilter, statusFilter, searchQuery, sortBy]);
 
-    // Apply sorting - Needs reply first, then already replied
-    const needsReply = filtered.filter(t => !t.latest_message_sender || t.latest_message_sender === 'reseller');
-    const alreadyReplied = filtered.filter(t => t.latest_message_sender === 'agent');
+useEffect(() => {
+  setDisplayedTickets(filteredTickets.slice(0, displayCount));
+  onTicketsLoad?.(filteredTickets);
+  setLoading(false);
+}, [filteredTickets, displayCount]);
 
-    const sortGroup = (tickets: Ticket[]) => {
-      if (sortBy === 'unread') {
-        return tickets.filter(t => t.unread_by_agent).sort((a, b) => 
-          new Date(b.latest_message_at || b.created_at).getTime() - new Date(a.latest_message_at || a.created_at).getTime()
-        );
-      } else if (sortBy === 'newest') {
-        return tickets.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      } else if (sortBy === 'oldest' || sortBy === 'longest-wait') {
-        return tickets.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-      }
-      return tickets;
-    };
-
-    filtered = [...sortGroup(needsReply), ...sortGroup(alreadyReplied)];
-
-    setFilteredTickets(filtered);
-    setDisplayedTickets(filtered.slice(0, displayCount));
-    onTicketsLoad?.(filtered);
-    setLoading(false);
-  }, [allTickets, currentView, profile, topicFilter, statusFilter, searchQuery, sortBy, displayCount]);
-
-  // Reset display count when view/filters change
+// Reset display count when view/filters change
   useEffect(() => {
     setDisplayCount(20);
     setAutoLoadCount(0);

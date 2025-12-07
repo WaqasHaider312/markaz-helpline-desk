@@ -26,38 +26,30 @@ export const TicketsProvider = ({ children }: { children: ReactNode }) => {
   if (!profile) return;
 
   try {
-    // Load first 1000 immediately
-    const { data: initialData, error: initialError } = await supabase
+    // Load ALL active tickets (Pending + In Progress)
+    const { data: activeTickets, error: activeError } = await supabase
       .from('tickets')
       .select('*, agent_profiles!assigned_agent_id(full_name)')
+      .in('status', ['Pending', 'In Progress'])
+      .order('created_at', { ascending: false });
+
+    if (activeError) throw activeError;
+
+    // Load only first 40 resolved
+    const { data: resolvedTickets, error: resolvedError } = await supabase
+      .from('tickets')
+      .select('*, agent_profiles!assigned_agent_id(full_name)')
+      .eq('status', 'Resolved')
       .order('created_at', { ascending: false })
-      .range(0, 999);
+      .limit(40);
 
-    if (initialError) throw initialError;
+    if (resolvedError) throw resolvedError;
+
+    // Combine and sort by created_at
+    const allTickets = [...(activeTickets || []), ...(resolvedTickets || [])];
+    allTickets.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     
-    // Show first batch immediately
-    setTickets(initialData || []);
-
-    // Load rest in background
-    let allTickets = [...(initialData || [])];
-    let from = 1000;
-    const pageSize = 1000;
-
-    while (true) {
-      const { data, error } = await supabase
-        .from('tickets')
-        .select('*, agent_profiles!assigned_agent_id(full_name)')
-        .order('created_at', { ascending: false })
-        .range(from, from + pageSize - 1);
-
-      if (error || !data || data.length === 0) break;
-      
-      allTickets = [...allTickets, ...data];
-      setTickets([...allTickets]); // Update progressively
-      
-      if (data.length < pageSize) break;
-      from += pageSize;
-    }
+    setTickets(allTickets);
   } catch (error) {
     console.error('Error fetching tickets:', error);
   }

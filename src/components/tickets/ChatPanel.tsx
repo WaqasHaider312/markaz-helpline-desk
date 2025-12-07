@@ -257,17 +257,12 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo, onSelectTicket }: ChatPan
       .channel(`ticket-${ticketId}`)
       .on(
         'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `ticket_id=eq.${ticketId}`,
-        },
+        { event: 'UPDATE', schema: 'public', table: 'tickets' },
         (payload) => {
-          setMessages((prev) => {
-            if (prev.find(m => m.id === payload.new.id)) return prev;
-            return [...prev, payload.new as Message];
-          });
+          setTicket(prev => prev?.id === payload.new.id 
+            ? { ...prev, ...payload.new } 
+            : prev
+          );
         }
       )
       .subscribe();

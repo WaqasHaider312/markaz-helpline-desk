@@ -7,6 +7,7 @@ import { ViewType } from '@/pages/Tickets';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { useTickets } from '@/contexts/TicketsContext';
+import { useMemo } from 'react'; // Add to existing React import
 
 
 interface SidebarProps {
@@ -27,28 +28,27 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
   const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { tickets } = useTickets();
-  const [counts, setCounts] = useState<ViewCounts>({
+
+  const counts = useMemo(() => {
+  if (!profile) return {
     myOpen: 0,
     unassigned: 0,
     allAssigned: 0,
     myResolvedToday: 0,
     allResolvedToday: 0,
-  });
+  };
 
-  useEffect(() => {
-  if (!profile) return; // ✅ Only check profile
-  
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  setCounts({
+  return {
     myOpen: tickets.filter(t => t.assigned_agent_id === profile.id && t.status !== 'Resolved').length,
     allAssigned: tickets.filter(t => t.status !== 'Resolved' && t.assigned_agent_id !== null).length,
     unassigned: tickets.filter(t => t.assigned_agent_id === null && t.status !== 'Resolved').length,
     myResolvedToday: tickets.filter(t => (t as any).resolved_by === profile.id && t.status === 'Resolved' && new Date(t.updated_at) >= today).length,
     allResolvedToday: tickets.filter(t => t.status === 'Resolved' && new Date(t.updated_at) >= today).length,
-  });
-  }, [tickets, profile]);
+  };
+}, [tickets, profile]);
  
 
   const views = [
