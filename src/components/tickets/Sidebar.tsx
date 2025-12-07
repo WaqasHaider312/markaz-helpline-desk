@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -7,8 +7,7 @@ import { ViewType } from '@/pages/Tickets';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { useTickets } from '@/contexts/TicketsContext';
-import { useMemo } from 'react'; // Add to existing React import
-import { useEffect, useState, useMemo } from 'react';
+
 
 
 interface SidebarProps {
@@ -28,6 +27,10 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [dbCounts, setDbCounts] = useState({
+  allTickets: 0,
+  allResolvedToday: 0
+  });
   const { tickets } = useTickets();
 
   const counts = useMemo(() => {
@@ -104,10 +107,7 @@ useEffect(() => {
       .slice(0, 2);
   };
 
-  const [dbCounts, setDbCounts] = useState({
-  allTickets: 0,
-  allResolvedToday: 0
-  });
+  
 
   return (
     <div className={`bg-white border-r border-gray-200 flex flex-col h-full transition-all duration-300 ${isCollapsed ? 'w-16' : 'w-60'}`}>
