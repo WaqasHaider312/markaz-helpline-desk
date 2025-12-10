@@ -147,7 +147,14 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
       }
 
       // Count open tickets
-      setOpenTicketsCount(activeTickets.length);
+      // setOpenTicketsCount(activeTickets.length);
+
+      // Count open tickets excluding Return Issues
+      const nonReturnTickets = activeTickets.filter(t => 
+        t.issue_type !== 'Return Issues'
+      );
+      setOpenTicketsCount(nonReturnTickets.length);
+      
     } catch (error) {
       console.error('Error fetching reseller stats:', error);
       setResellerStats(null);
