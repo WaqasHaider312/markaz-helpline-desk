@@ -71,9 +71,8 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
       // Get all tickets for this reseller
       const { data: allTickets, error } = await supabase
         .from('tickets')
-        .select('status, issue_type, created_at')
+        .select('status, issue_type, created_at, ticket_source')
         .eq('reseller_id', resellerId);
-
       if (error) throw error;
 
       if (!allTickets) {
@@ -86,7 +85,7 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
       const thirtyDaysAgo = subDays(now, 30);
 
       // Calculate stats
-      const activeTickets = allTickets.filter(t => t.status !== 'Resolved');
+      const activeTickets = allTickets.filter(t => t.status !== 'Resolved' && t.ticket_source !== 'auto');
       const resolvedTickets = allTickets.filter(t => t.status === 'Resolved');
       const last7DaysTickets = allTickets.filter(t => new Date(t.created_at) >= sevenDaysAgo);
       const last30DaysTickets = allTickets.filter(t => new Date(t.created_at) >= thirtyDaysAgo);
@@ -150,10 +149,10 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
       // setOpenTicketsCount(activeTickets.length);
 
       // Count open tickets excluding Return Issues
-      const nonReturnTickets = activeTickets.filter(t => 
-        t.issue_type !== 'Return Issues'
+      const nonAutoTickets = activeTickets.filter(t => 
+        t.ticket_source !== 'auto'
       );
-      setOpenTicketsCount(nonReturnTickets.length);
+      setOpenTicketsCount(nonAutoTickets.length);
       
     } catch (error) {
       console.error('Error fetching reseller stats:', error);
