@@ -29,64 +29,29 @@ async function executeProtocol(protocol: any, collectedParams: Record<string, an
       'Content-Type': 'application/json',
       ...(protocol.headers || {}),
     };
-
     let body: string | undefined;
     if (method !== 'GET') {
-      const bodyTemplate = protocol.body_template || '{}';
-      const filled = fillTemplate(bodyTemplate, collectedParams);
-      try {
-        JSON.parse(filled);
-        body = filled;
-      } catch {
-        body = JSON.stringify({ data: filled, params: collectedParams });
-      }
+      const filled = fillTemplate(protocol.body_template || '{}', collectedParams);
+      try { JSON.parse(filled); body = filled; }
+      catch { body = JSON.stringify({ params: collectedParams }); }
     }
-
-    const res = await fetch(url, {
-      method,
-      headers,
-      body: method !== 'GET' ? body : undefined,
-    });
-
+    const res = await fetch(url, { method, headers, body: method !== 'GET' ? body : undefined });
     const text = await res.text();
-    try {
-      const json = JSON.parse(text);
-      return JSON.stringify(json, null, 2);
-    } catch {
-      return text;
-    }
+    try { return JSON.stringify(JSON.parse(text)); } catch { return text; }
   } catch (err: any) {
-    return `Error executing protocol: ${err.message}`;
+    return `Error: ${err.message}`;
   }
 }
 
 const ESCALATION_PHRASES = [
-  'handing over',
-  'hand over',
-  'handover',
-  'escalating',
-  'escalate',
-  'human agent',
-  'live agent',
-  'agent will',
-  'team will assist',
-  'team will help',
-  'support team will',
-  'forwarding',
-  'transferring to',
-  'connecting you',
-  'agent se baat',
-  'agent ko forward',
-  'insani agent',
-  'hamara agent',
-  'hamare agent',
-  'agent aapki',
-  'agent se milayenge',
+  'handing over', 'hand over', 'handover', 'escalating', 'human agent',
+  'live agent', 'agent will', 'team will assist', 'support team will',
+  'agent se baat', 'agent ko forward', 'insani agent', 'hamara agent',
 ];
 
 function containsEscalation(text: string): boolean {
   const lower = text.toLowerCase();
-  return ESCALATION_PHRASES.some(phrase => lower.includes(phrase));
+  return ESCALATION_PHRASES.some(p => lower.includes(p));
 }
 
 Deno.serve(async (req) => {
@@ -101,112 +66,150 @@ Deno.serve(async (req) => {
     const payload = await req.json();
     const message = payload.record;
 
-    // Only trigger on reseller messages
     if (message.sender_type !== 'reseller') {
-      return new Response(JSON.stringify({ skipped: 'not a reseller message' }), {
+      return new Response(JSON.stringify({ skipped: 'not reseller' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // ── 1. Fetch AI config ────────────────────────────────────────────────────
+    // ── 1. Config ─────────────────────────────────────────────────────────────
     const { data: config } = await supabase
       .from('ai_config')
-      .select('*')
+      .select('claude_api_key, test_mode_only, test_mode_phone')
       .eq('id', 1)
       .single();
 
     if (!config?.claude_api_key) {
-      return new Response(JSON.stringify({ skipped: 'no API key configured' }), {
+      return new Response(JSON.stringify({ skipped: 'no API key' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // ── 2. Fetch ticket ───────────────────────────────────────────────────────
+    // ── 2. Ticket ─────────────────────────────────────────────────────────────
     const { data: ticket } = await supabase
       .from('tickets')
-      .select('*')
+      .select('id, ticket_number, issue_type, order_id, reseller_name, reseller_phone, status, ai_escalated, assigned_agent_id, ai_handled')
       .eq('id', message.ticket_id)
       .single();
 
     if (!ticket) {
-      return new Response(JSON.stringify({ skipped: 'ticket not found' }), {
+      return new Response(JSON.stringify({ skipped: 'no ticket' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // ── 3. Test mode check ────────────────────────────────────────────────────
+    // ── 3. Test mode ──────────────────────────────────────────────────────────
     if (config.test_mode_only) {
-      const normalizedPhone = ticket.reseller_phone?.replace(/\s/g, '');
-      const normalizedTest = config.test_mode_phone?.replace(/\s/g, '');
-      if (normalizedPhone !== normalizedTest) {
-        return new Response(JSON.stringify({ skipped: 'test mode - phone not whitelisted' }), {
+      const phone = ticket.reseller_phone?.replace(/\s/g, '');
+      const test = config.test_mode_phone?.replace(/\s/g, '');
+      if (phone !== test) {
+        return new Response(JSON.stringify({ skipped: 'test mode' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
     }
 
-    // ── 4. Check AI enabled for issue type ───────────────────────────────────
+    // ── 4. AI enabled ─────────────────────────────────────────────────────────
     const { data: aiSetting } = await supabase
       .from('ai_settings')
-      .select('*')
+      .select('ai_enabled, system_prompt')
       .eq('issue_type', ticket.issue_type)
       .eq('ai_enabled', true)
       .single();
 
     if (!aiSetting) {
-      return new Response(JSON.stringify({ skipped: 'AI not enabled for this issue type' }), {
+      return new Response(JSON.stringify({ skipped: 'AI not enabled' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // ── 5. Check if AI already escalated ─────────────────────────────────────
+    // ── 5. Already escalated ──────────────────────────────────────────────────
     if (ticket.ai_escalated) {
-      return new Response(JSON.stringify({ skipped: 'AI already escalated to human agent' }), {
+      return new Response(JSON.stringify({ skipped: 'AI escalated' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // ── 6. Check if human agent has taken over ────────────────────────────────
-    const { data: agentMessages } = await supabase
+    // ── 6. Assigned to human agent ────────────────────────────────────────────
+    if (ticket.assigned_agent_id) {
+      return new Response(JSON.stringify({ skipped: 'assigned to human' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ── 7. Human agent already replied ───────────────────────────────────────
+    const { data: humanMsgs } = await supabase
       .from('messages')
-      .select('sender_name')
+      .select('id')
       .eq('ticket_id', ticket.id)
       .eq('sender_type', 'agent')
       .neq('sender_name', 'Markaz AI')
       .limit(1);
 
-    if (agentMessages && agentMessages.length > 0) {
-      return new Response(JSON.stringify({ skipped: 'human agent has taken over' }), {
+    if (humanMsgs && humanMsgs.length > 0) {
+      return new Response(JSON.stringify({ skipped: 'human replied' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // ── 7. Fetch conversation history ─────────────────────────────────────────
+    // ── 8. Fetch full conversation ────────────────────────────────────────────
     const { data: history } = await supabase
       .from('messages')
-      .select('sender_type, sender_name, message, created_at')
+      .select('sender_type, sender_name, message')
       .eq('ticket_id', ticket.id)
       .order('created_at', { ascending: true })
-      .limit(30);
+      .limit(20);
 
-    // ── 8. Fetch knowledge base ───────────────────────────────────────────────
+    // ── 9. Count AI replies ───────────────────────────────────────────────────
+    const aiReplyCount = (history || []).filter(
+      (m: any) => m.sender_type === 'agent' && m.sender_name === 'Markaz AI'
+    ).length;
+
+    // ── 10. AI reply limit reached → move to unassigned ───────────────────────
+    if (aiReplyCount >= 3) {
+      // Mark ai_handled false so it leaves AI tab and goes to unassigned
+      await supabase
+        .from('tickets')
+        .update({
+          ai_handled: false,
+          assigned_agent_id: null,
+        })
+        .eq('id', ticket.id);
+
+      return new Response(JSON.stringify({ skipped: 'AI reply limit reached — moved to unassigned' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ── 11. Mark ticket as AI handled on first reply ──────────────────────────
+    if (!ticket.ai_handled) {
+      await supabase
+        .from('tickets')
+        .update({ ai_handled: true })
+        .eq('id', ticket.id);
+    }
+
+    // ── 12. Last 10 messages for Claude ──────────────────────────────────────
+    const historyForClaude = (history || []).slice(-10);
+
+    // ── 13. Knowledge base ────────────────────────────────────────────────────
     const { data: knowledgeDocs } = await supabase
       .from('ai_knowledge_base')
       .select('title, content')
       .or(`issue_type.eq.${ticket.issue_type},issue_type.is.null`);
 
     const knowledgeContext = knowledgeDocs?.length
-      ? knowledgeDocs.map((d: any) => `## ${d.title}\n${d.content}`).join('\n\n')
+      ? knowledgeDocs.map((d: any) => `${d.title}: ${d.content}`).join('\n').slice(0, 1500)
       : '';
 
-    // ── 9. Fetch active protocols ─────────────────────────────────────────────
+    // ── 14. Protocols ─────────────────────────────────────────────────────────
     const { data: protocols } = await supabase
       .from('ai_protocols')
       .select('*, ai_protocol_params(*)')
       .eq('is_active', true)
       .or(`issue_type.eq.${ticket.issue_type},issue_type.is.null`);
 
-    // ── 10. Build Claude tools from protocols ──────────────────────────────────
+    // ── 15. Build Claude tools ────────────────────────────────────────────────
     const claudeTools = (protocols || []).map((p: any) => {
       const properties: Record<string, any> = {};
       const required: string[] = [];
@@ -217,10 +220,12 @@ Deno.serve(async (req) => {
       }
       return {
         name: slugify(p.name),
-        description: `${p.trigger_description}${p.requires_confirmation ? ' [REQUIRES CONFIRMATION]' : ' [EXECUTE IMMEDIATELY]'}`,
+        description: p.trigger_description,
         input_schema: {
           type: 'object',
-          properties: Object.keys(properties).length ? properties : { details: { type: 'string', description: 'Any relevant details' } },
+          properties: Object.keys(properties).length
+            ? properties
+            : { details: { type: 'string', description: 'Details' } },
           required,
         },
         _protocol: p,
@@ -229,52 +234,35 @@ Deno.serve(async (req) => {
 
     const claudeToolsForAPI = claudeTools.map(({ _protocol, ...tool }) => tool);
 
-    const protocolInstructions = claudeTools.length > 0 ? `
+    // ── 16. System prompt ─────────────────────────────────────────────────────
+    const systemPrompt = `${aiSetting.system_prompt || 'You are a helpful Markaz support agent. Be brief and reply in the same language as the reseller.'}
 
-PROTOCOLS (actions you can perform):
-${claudeTools.map(t => `- ${t.name}: ${t.description}`).join('\n')}
+TICKET: ${ticket.ticket_number} | ${ticket.issue_type} | Order: ${ticket.order_id || 'N/A'} | Reseller: ${ticket.reseller_name} | Phone: ${ticket.reseller_phone}
+AI replies remaining: ${3 - aiReplyCount} of 3.
+${knowledgeContext ? `\nKNOWLEDGE:\n${knowledgeContext}` : ''}`;
 
-Rules:
-1. Extract required parameters from conversation history first
-2. If a required parameter is missing, ask the customer naturally
-3. For [EXECUTE IMMEDIATELY]: call the tool right away
-4. For [REQUIRES CONFIRMATION]: tell customer what you will do and wait for their confirmation
-5. After receiving tool results, respond naturally based on the data returned` : '';
-
-    // ── 11. Build system prompt ────────────────────────────────────────────────
-    const systemPrompt = `${aiSetting.system_prompt || `You are a helpful customer support agent for Markaz, a Pakistani e-commerce reseller platform. Be concise, professional, and helpful. Respond in the same language the reseller used (Urdu/Roman Urdu or English). If you cannot resolve the issue, say you are escalating to a human agent.`}
-
-TICKET CONTEXT:
-- Ticket: ${ticket.ticket_number}
-- Issue Type: ${ticket.issue_type}
-- Order ID: ${ticket.order_id || 'N/A'}
-- Reseller: ${ticket.reseller_name}
-- Phone: ${ticket.reseller_phone}
-
-${knowledgeContext ? `KNOWLEDGE BASE:\n${knowledgeContext}\n` : ''}${protocolInstructions}`;
-
-    const conversationMessages = (history || []).map((m: any) => ({
+    const conversationMessages = historyForClaude.map((m: any) => ({
       role: m.sender_type === 'agent' ? 'assistant' : 'user',
       content: m.message,
     }));
 
-    // ── 12. Agentic loop ──────────────────────────────────────────────────────
+    // ── 17. Agentic loop ──────────────────────────────────────────────────────
     let loopMessages = [...conversationMessages];
     let finalReply = '';
     let toolsUsed: string[] = [];
-    const MAX_ITERATIONS = 5;
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    const MAX_ITERATIONS = 3;
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
       const claudeBody: any = {
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1024,
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 400,
         system: systemPrompt,
         messages: loopMessages,
       };
 
-      if (claudeToolsForAPI.length > 0) {
-        claudeBody.tools = claudeToolsForAPI;
-      }
+      if (claudeToolsForAPI.length > 0) claudeBody.tools = claudeToolsForAPI;
 
       const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -287,7 +275,10 @@ ${knowledgeContext ? `KNOWLEDGE BASE:\n${knowledgeContext}\n` : ''}${protocolIns
       });
 
       const claudeData = await claudeRes.json();
-      if (!claudeRes.ok) throw new Error(`Claude API error: ${JSON.stringify(claudeData)}`);
+      if (!claudeRes.ok) throw new Error(`Claude error: ${JSON.stringify(claudeData)}`);
+
+      totalInputTokens += claudeData.usage?.input_tokens || 0;
+      totalOutputTokens += claudeData.usage?.output_tokens || 0;
 
       if (claudeData.stop_reason === 'tool_use') {
         loopMessages.push({ role: 'assistant', content: claudeData.content });
@@ -299,22 +290,14 @@ ${knowledgeContext ? `KNOWLEDGE BASE:\n${knowledgeContext}\n` : ''}${protocolIns
           let resultText = 'Tool not found';
 
           if (matchedTool) {
-            toolsUsed.push(matchedTool._protocol.name);
+            toolsUsed.push(matchedTool.name);
             resultText = await executeProtocol(matchedTool._protocol, block.input || {});
-
-            await supabase.from('ai_logs').insert({
-              ticket_id: ticket.id,
-              issue_type: ticket.issue_type,
-              action_taken: `protocol:${matchedTool._protocol.name}`,
-              prompt_sent: JSON.stringify(block.input),
-              response_received: resultText,
-            });
 
             await supabase.from('internal_notes').insert({
               ticket_id: ticket.id,
               agent_id: null,
               agent_name: 'Markaz AI',
-              note_text: `🤖 Protocol executed: ${matchedTool._protocol.name}\nParams: ${JSON.stringify(block.input, null, 2)}\nResult: ${resultText.slice(0, 500)}`,
+              note_text: `🤖 ${matchedTool.name}\nParams: ${JSON.stringify(block.input)}\nResult: ${resultText.slice(0, 200)}`,
             });
           }
 
@@ -331,10 +314,10 @@ ${knowledgeContext ? `KNOWLEDGE BASE:\n${knowledgeContext}\n` : ''}${protocolIns
     }
 
     if (!finalReply) {
-      finalReply = 'Apologies, I was unable to process your request. A human agent will assist you shortly.';
+      finalReply = 'Unable to process. A human agent will assist shortly.';
     }
 
-    // ── 13. Post AI reply ─────────────────────────────────────────────────────
+    // ── 18. Post reply ────────────────────────────────────────────────────────
     const { data: newMessage, error: msgError } = await supabase
       .from('messages')
       .insert({
@@ -343,46 +326,48 @@ ${knowledgeContext ? `KNOWLEDGE BASE:\n${knowledgeContext}\n` : ''}${protocolIns
         sender_name: 'Markaz AI',
         message: finalReply,
       })
-      .select()
+      .select('id')
       .single();
 
     if (msgError) throw msgError;
 
-    // ── 14. Check if AI escalated — set flag if so ────────────────────────────
-    if (containsEscalation(finalReply)) {
-      await supabase
-        .from('tickets')
-        .update({ ai_escalated: true })
-        .eq('id', ticket.id);
-    }
+    // ── 19. Check escalation — move to unassigned if escalated ────────────────
+    const escalated = containsEscalation(finalReply);
 
-    // ── 15. Update ticket ─────────────────────────────────────────────────────
-    await supabase
-      .from('tickets')
-      .update({
-        latest_message: finalReply,
+    await Promise.all([
+      // If escalated — mark ai_escalated, remove ai_handled so it moves to unassigned
+      escalated
+        ? supabase.from('tickets').update({
+            ai_escalated: true,
+            ai_handled: false,
+          }).eq('id', ticket.id)
+        : Promise.resolve(),
+
+      supabase.from('tickets').update({
+        latest_message: finalReply.slice(0, 200),
         latest_message_at: new Date().toISOString(),
         latest_message_sender: 'agent',
         status: ticket.status === 'Pending' ? 'In Progress' : ticket.status,
-      })
-      .eq('id', ticket.id);
+      }).eq('id', ticket.id),
 
-    // ── 16. Log ───────────────────────────────────────────────────────────────
-    await supabase.from('ai_logs').insert({
-      ticket_id: ticket.id,
-      message_id: newMessage.id,
-      issue_type: ticket.issue_type,
-      action_taken: toolsUsed.length ? `replied + tools: ${toolsUsed.join(', ')}` : 'replied',
-      response_received: finalReply,
-    });
+      supabase.from('ai_logs').insert({
+        ticket_id: ticket.id,
+        message_id: newMessage.id,
+        issue_type: ticket.issue_type,
+        action_taken: toolsUsed.length ? `tools:${toolsUsed.join(',')}` : 'replied',
+        response_received: finalReply.slice(0, 200),
+        input_tokens: totalInputTokens,
+        output_tokens: totalOutputTokens,
+      }),
+    ]);
 
     return new Response(
-      JSON.stringify({ success: true, reply: finalReply, tools_used: toolsUsed, escalated: containsEscalation(finalReply) }),
+      JSON.stringify({ success: true, tokens: { in: totalInputTokens, out: totalOutputTokens } }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error: any) {
-    console.error('AI Responder error:', error);
+    console.error('Error:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

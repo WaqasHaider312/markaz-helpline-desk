@@ -58,74 +58,78 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
   }, []);
 
   const filteredTickets = useMemo(() => {
-  if (!profile) return [];
+    if (!profile) return [];
 
-  // Use search results if searching
-  if (searchQuery.trim()) {
-    return searchResults;
-  }
-
-  let filtered = [...allTickets];
-  // ... rest of existing code stays the same
-
-  if (searchQuery) {
-    filtered = filtered.filter(t => 
-      t.ticket_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.reseller_phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.order_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.reseller_name?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  } else {
-    if (currentView === 'my-open') {
-      filtered = filtered.filter(t => t.assigned_agent_id === profile.id && t.status !== 'Resolved');
-    } else if (currentView === 'all-assigned') {
-      filtered = filtered.filter(t => t.status !== 'Resolved' && t.assigned_agent_id !== null);
-    } else if (currentView === 'unassigned') {
-      filtered = filtered.filter(t => t.assigned_agent_id === null && t.status !== 'Resolved');
-    } else if (currentView === 'my-resolved-today') {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      filtered = filtered.filter(t => (t as any).resolved_by === profile.id && t.status === 'Resolved' && new Date(t.updated_at) >= today);
-    } else if (currentView === 'all-resolved-today') {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      filtered = filtered.filter(t => t.status === 'Resolved' && new Date(t.updated_at) >= today);
+    // Use search results if searching
+    if (searchQuery.trim()) {
+      return searchResults;
     }
-  }
 
-  if (topicFilter !== 'All Topics') {
-    filtered = filtered.filter(t => t.issue_type === topicFilter);
-  }
-  if (statusFilter !== 'All') {
-    filtered = filtered.filter(t => t.status === statusFilter);
-  }
+    let filtered = [...allTickets];
+    // ... rest of existing code stays the same
 
-  const needsReply = filtered.filter(t => !t.latest_message_sender || t.latest_message_sender === 'reseller');
-  const alreadyReplied = filtered.filter(t => t.latest_message_sender === 'agent');
-
-  const sortGroup = (tickets: Ticket[]) => {
-    if (sortBy === 'unread') {
-      return tickets.filter(t => t.unread_by_agent).sort((a, b) => 
-        new Date(b.latest_message_at || b.created_at).getTime() - new Date(a.latest_message_at || a.created_at).getTime()
+    if (searchQuery) {
+      filtered = filtered.filter(t =>
+        t.ticket_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.reseller_phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.order_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.reseller_name?.toLowerCase().includes(searchQuery.toLowerCase())
       );
-    } else if (sortBy === 'newest') {
-      return tickets.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    } else if (sortBy === 'oldest' || sortBy === 'longest-wait') {
-      return tickets.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    } else {
+      if (currentView === 'my-open') {
+        filtered = filtered.filter(t => t.assigned_agent_id === profile.id && t.status !== 'Resolved');
+      } else if (currentView === 'all-assigned') {
+        filtered = filtered.filter(t => t.status !== 'Resolved' && t.assigned_agent_id !== null);
+      } else if (currentView === 'unassigned') {
+        // Unassigned: not assigned, not resolved, NOT currently AI handled
+        filtered = filtered.filter(t => t.assigned_agent_id === null && t.status !== 'Resolved' && !(t as any).ai_handled);
+      } else if (currentView === 'ai-handling') {
+        // AI Handling: actively handled by AI, not resolved
+        filtered = filtered.filter(t => (t as any).ai_handled === true && t.status !== 'Resolved');
+      } else if (currentView === 'my-resolved-today') {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        filtered = filtered.filter(t => (t as any).resolved_by === profile.id && t.status === 'Resolved' && new Date(t.updated_at) >= today);
+      } else if (currentView === 'all-resolved-today') {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        filtered = filtered.filter(t => t.status === 'Resolved' && new Date(t.updated_at) >= today);
+      }
     }
-    return tickets;
-  };
 
-  return [...sortGroup(needsReply), ...sortGroup(alreadyReplied)];
-}, [allTickets, currentView, profile, topicFilter, statusFilter, searchQuery, sortBy, searchResults]);
+    if (topicFilter !== 'All Topics') {
+      filtered = filtered.filter(t => t.issue_type === topicFilter);
+    }
+    if (statusFilter !== 'All') {
+      filtered = filtered.filter(t => t.status === statusFilter);
+    }
 
-useEffect(() => {
-  setDisplayedTickets(filteredTickets.slice(0, displayCount));
-  onTicketsLoad?.(filteredTickets);
-  setLoading(false);
-}, [filteredTickets, displayCount]);
+    const needsReply = filtered.filter(t => !t.latest_message_sender || t.latest_message_sender === 'reseller');
+    const alreadyReplied = filtered.filter(t => t.latest_message_sender === 'agent');
 
-// Reset display count when view/filters change
+    const sortGroup = (tickets: Ticket[]) => {
+      if (sortBy === 'unread') {
+        return tickets.filter(t => t.unread_by_agent).sort((a, b) =>
+          new Date(b.latest_message_at || b.created_at).getTime() - new Date(a.latest_message_at || a.created_at).getTime()
+        );
+      } else if (sortBy === 'newest') {
+        return tickets.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      } else if (sortBy === 'oldest' || sortBy === 'longest-wait') {
+        return tickets.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      }
+      return tickets;
+    };
+
+    return [...sortGroup(needsReply), ...sortGroup(alreadyReplied)];
+  }, [allTickets, currentView, profile, topicFilter, statusFilter, searchQuery, sortBy, searchResults]);
+
+  useEffect(() => {
+    setDisplayedTickets(filteredTickets.slice(0, displayCount));
+    onTicketsLoad?.(filteredTickets);
+    setLoading(false);
+  }, [filteredTickets, displayCount]);
+
+  // Reset display count when view/filters change
   useEffect(() => {
     setDisplayCount(20);
     setAutoLoadCount(0);
@@ -173,30 +177,30 @@ useEffect(() => {
 
 
   const searchDatabase = async (query: string) => {
-  if (!query.trim()) {
-    setSearchResults([]);
-    setIsSearching(false);
-    return;
-  }
+    if (!query.trim()) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
 
-  setIsSearching(true);
-  try {
-    const { data, error } = await supabase
-      .from('tickets')
-      .select('*, agent_profiles!assigned_agent_id(full_name)')
-      .or(`ticket_number.ilike.%${query}%,reseller_phone.ilike.%${query}%,order_id.ilike.%${query}%,reseller_name.ilike.%${query}%`)
-      .order('created_at', { ascending: false })
-      .limit(100);
+    setIsSearching(true);
+    try {
+      const { data, error } = await supabase
+        .from('tickets')
+        .select('*, agent_profiles!assigned_agent_id(full_name)')
+        .or(`ticket_number.ilike.%${query}%,reseller_phone.ilike.%${query}%,order_id.ilike.%${query}%,reseller_name.ilike.%${query}%`)
+        .order('created_at', { ascending: false })
+        .limit(100);
 
-    if (error) throw error;
-    setSearchResults(data || []);
-  } catch (error) {
-    console.error('Error searching:', error);
-    setSearchResults([]);
-  } finally {
-    setIsSearching(false);
-  }
-};
+      if (error) throw error;
+      setSearchResults(data || []);
+    } catch (error) {
+      console.error('Error searching:', error);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   const handleTicketCheckbox = (ticketId: string) => {
     const newSelected = new Set(selectedTickets);
@@ -231,10 +235,10 @@ useEffect(() => {
           .eq('id', update.id);
 
         if (error) throw error;
-        
+
         const assignedTo = selectedAgent === 'unassign' ? null : agents.find(a => a.id === selectedAgent)?.full_name;
         let activityDetails = '';
-        
+
         if (selectedAgent === 'unassign') {
           activityDetails = `${profile?.full_name} unassigned the ticket`;
         } else if (selectedAgent === profile?.id) {
@@ -242,7 +246,7 @@ useEffect(() => {
         } else {
           activityDetails = `${profile?.full_name} assigned ticket to ${assignedTo}`;
         }
-        
+
         await supabase.from('ticket_activities').insert({
           ticket_id: update.id,
           activity_type: 'assigned',
@@ -271,10 +275,10 @@ useEffect(() => {
       for (const ticketId of Array.from(selectedTickets)) {
         const { error } = await supabase
           .from('tickets')
-          .update({ 
-            status: 'Resolved', 
+          .update({
+            status: 'Resolved',
             resolved_by: profile?.id,
-            updated_at: new Date().toISOString() 
+            updated_at: new Date().toISOString()
           })
           .eq('id', ticketId);
 
@@ -302,7 +306,7 @@ useEffect(() => {
   const handleLoadMore = () => {
     setDisplayCount(prev => prev + 20);
   };
-      
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Pending':
@@ -345,7 +349,7 @@ useEffect(() => {
             >
               <Search className="h-4 w-4" />
             </Button>
-            
+
             {/* Sort Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -394,12 +398,12 @@ useEffect(() => {
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
-              
+
               // Clear previous timeout
               if (searchTimeoutRef.current) {
                 clearTimeout(searchTimeoutRef.current);
               }
-              
+
               // Debounce search by 500ms
               searchTimeoutRef.current = setTimeout(() => {
                 searchDatabase(e.target.value);
@@ -533,9 +537,8 @@ useEffect(() => {
             {displayedTickets.map((ticket) => (
               <div
                 key={ticket.id}
-                className={`flex items-start gap-3 p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
-                  selectedTicketId === ticket.id ? 'bg-blue-50 border-l-4 border-primary' : ''
-                } ${((ticket.latest_message_sender === 'reseller' || !ticket.latest_message_sender) && ticket.status !== 'Resolved') ? 'bg-blue-50' : ''}`}
+                className={`flex items-start gap-3 p-4 hover:bg-gray-50 transition-colors cursor-pointer ${selectedTicketId === ticket.id ? 'bg-blue-50 border-l-4 border-primary' : ''
+                  } ${((ticket.latest_message_sender === 'reseller' || !ticket.latest_message_sender) && ticket.status !== 'Resolved') ? 'bg-blue-50' : ''}`}
                 onClick={() => {
                   onSelectTicket(ticket.id);
                   onTicketOpen?.(ticket);
@@ -550,18 +553,18 @@ useEffect(() => {
                   }}
                   className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer flex-shrink-0"
                 />
-                
+
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                        {((ticket.latest_message_sender === 'reseller' || !ticket.latest_message_sender) && ticket.status !== 'Resolved') && (
-                          <span className="h-2 w-2 bg-blue-500 rounded-full animate-pulse flex-shrink-0"></span>
-                        )}
-                        <FileText className="h-4 w-4 text-primary flex-shrink-0" />
-                        <span className={`text-sm text-primary ${((ticket.latest_message_sender === 'reseller' || !ticket.latest_message_sender) && ticket.status !== 'Resolved') ? 'font-bold' : 'font-semibold'}`}>
-                          {ticket.ticket_number}
-                        </span>
-                      </div>
+                      {((ticket.latest_message_sender === 'reseller' || !ticket.latest_message_sender) && ticket.status !== 'Resolved') && (
+                        <span className="h-2 w-2 bg-blue-500 rounded-full animate-pulse flex-shrink-0"></span>
+                      )}
+                      <FileText className="h-4 w-4 text-primary flex-shrink-0" />
+                      <span className={`text-sm text-primary ${((ticket.latest_message_sender === 'reseller' || !ticket.latest_message_sender) && ticket.status !== 'Resolved') ? 'font-bold' : 'font-semibold'}`}>
+                        {ticket.ticket_number}
+                      </span>
+                    </div>
                     <span className={`status-badge ${getStatusColor(ticket.status)} flex-shrink-0`}>
                       {ticket.status}
                     </span>
@@ -589,7 +592,7 @@ useEffect(() => {
                   </p>
 
                   <p className="text-xs text-gray-400">
-                    {ticket.latest_message_at 
+                    {ticket.latest_message_at
                       ? formatDistanceToNow(new Date(ticket.latest_message_at), { addSuffix: true })
                       : formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true })
                     }

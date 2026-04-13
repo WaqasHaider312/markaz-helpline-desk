@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Inbox, Clock, CheckCircle, LayoutDashboard, MessageSquare, Settings, LogOut, UserX, Users, ChevronLeft, ChevronRight, Headphones } from 'lucide-react';
+import { Inbox, Clock, CheckCircle, LayoutDashboard, MessageSquare, Settings, LogOut, UserX, Users, ChevronLeft, ChevronRight, Headphones, Bot } from 'lucide-react';
 import { ViewType } from '@/pages/Tickets';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -28,63 +28,69 @@ const Sidebar = ({ currentView, onViewChange }: SidebarProps) => {
   const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [dbCounts, setDbCounts] = useState({
-  allTickets: 0,
-  allResolvedToday: 0
+    allTickets: 0,
+    allResolvedToday: 0,
+    aiHandling: 0,
   });
   const { tickets } = useTickets();
 
   const counts = useMemo(() => {
-  if (!profile) return {
-    myOpen: 0,
-    unassigned: 0,
-    allAssigned: 0,
-    myResolvedToday: 0,
-    allResolvedToday: 0,
-  };
+    if (!profile) return {
+      myOpen: 0,
+      unassigned: 0,
+      allAssigned: 0,
+      myResolvedToday: 0,
+      allResolvedToday: 0,
+    };
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-  return {
-    myOpen: tickets.filter(t => t.assigned_agent_id === profile.id && t.status !== 'Resolved').length,
-    allAssigned: tickets.filter(t => t.status !== 'Resolved' && t.assigned_agent_id !== null).length,
-    unassigned: tickets.filter(t => t.assigned_agent_id === null && t.status !== 'Resolved').length,
-    myResolvedToday: tickets.filter(t => (t as any).resolved_by === profile.id && t.status === 'Resolved' && new Date(t.updated_at) >= today).length,
-    allResolvedToday: tickets.filter(t => t.status === 'Resolved' && new Date(t.updated_at) >= today).length,
-  };
-}, [tickets, profile]);
- 
-useEffect(() => {
-  const fetchDbCounts = async () => {
-    try {
-      const { count: totalCount } = await supabase
-        .from('tickets')
-        .select('*', { count: 'exact', head: true });
+    return {
+      myOpen: tickets.filter(t => t.assigned_agent_id === profile.id && t.status !== 'Resolved').length,
+      allAssigned: tickets.filter(t => t.status !== 'Resolved' && t.assigned_agent_id !== null).length,
+      // Unassigned: not assigned, not resolved, not currently being handled by AI
+      unassigned: tickets.filter(t => t.assigned_agent_id === null && t.status !== 'Resolved' && !(t as any).ai_handled).length,
+      // AI Handling: actively being handled by AI (ai_handled = true)
+      aiHandling: tickets.filter(t => (t as any).ai_handled === true && t.status !== 'Resolved').length,
+      myResolvedToday: tickets.filter(t => (t as any).resolved_by === profile.id && t.status === 'Resolved' && new Date(t.updated_at) >= today).length,
+      allResolvedToday: tickets.filter(t => t.status === 'Resolved' && new Date(t.updated_at) >= today).length,
+    };
+  }, [tickets, profile]);
 
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      const { count: resolvedTodayCount } = await supabase
-        .from('tickets')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'Resolved')
-        .gte('updated_at', today.toISOString());
+  useEffect(() => {
+    const fetchDbCounts = async () => {
+      try {
+        const { count: totalCount } = await supabase
+          .from('tickets')
+          .select('*', { count: 'exact', head: true });
 
-      setDbCounts({
-        allTickets: totalCount || 0,
-        allResolvedToday: resolvedTodayCount || 0
-      });
-    } catch (error) {
-      console.error('Error fetching counts:', error);
-    }
-  };
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-  fetchDbCounts();
-}, [tickets]);
+        const { count: resolvedTodayCount } = await supabase
+          .from('tickets')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'Resolved')
+          .gte('updated_at', today.toISOString());
+
+        setDbCounts({
+          allTickets: totalCount || 0,
+          allResolvedToday: resolvedTodayCount || 0,
+          aiHandling: 0,
+        });
+      } catch (error) {
+        console.error('Error fetching counts:', error);
+      }
+    };
+
+    fetchDbCounts();
+  }, [tickets]);
 
 
   const views = [
     { id: 'my-open' as ViewType, label: 'My Open Tickets', icon: Inbox, count: counts.myOpen },
+    { id: 'ai-handling' as ViewType, label: '🤖 AI Handling', icon: Bot, count: counts.aiHandling },
     { id: 'unassigned' as ViewType, label: 'Unassigned Tickets', icon: UserX, count: counts.unassigned },
     { id: 'all-assigned' as ViewType, label: 'All Assigned', icon: Users, count: counts.allAssigned },
     { id: 'my-resolved-today' as ViewType, label: 'My Resolved Today', icon: CheckCircle, count: counts.myResolvedToday },
@@ -107,7 +113,7 @@ useEffect(() => {
       .slice(0, 2);
   };
 
-  
+
 
   return (
     <div className={`bg-white border-r border-gray-200 flex flex-col h-full transition-all duration-300 ${isCollapsed ? 'w-16' : 'w-60'}`}>
@@ -150,17 +156,16 @@ useEffect(() => {
           {views.map((view) => {
             const Icon = view.icon;
             const isActive = currentView === view.id;
-            
+
             return (
               <button
                 key={view.id}
                 onClick={() => onViewChange(view.id)}
                 title={isCollapsed ? view.label : ''}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
-                  isActive
-                    ? 'text-primary font-medium'
-                    : 'text-foreground hover:bg-gray-100'
-                } ${isCollapsed ? 'justify-center' : ''}`}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${isActive
+                  ? 'text-primary font-medium'
+                  : 'text-foreground hover:bg-gray-100'
+                  } ${isCollapsed ? 'justify-center' : ''}`}
               >
                 <div className={`flex items-center gap-2 ${isCollapsed ? 'flex-col' : ''}`}>
                   <Icon className="h-4 w-4" />
@@ -192,7 +197,7 @@ useEffect(() => {
         <div className="space-y-1">
           {menuItems.map((item) => {
             const Icon = item.icon;
-            
+
             return (
               <button
                 key={item.id}
