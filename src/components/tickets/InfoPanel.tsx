@@ -55,7 +55,7 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
     if (ticketId) {
       const currentTicket = tickets.find(t => t.id === ticketId);
       fetchAgents();
-      
+
       if (currentTicket) {
         setTicket(currentTicket);
         fetchResellerStats(currentTicket.reseller_id);
@@ -102,7 +102,7 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
       });
 
       // Calculate average per day (based on first ticket date to now)
-      const firstTicketDate = allTickets.length > 0 
+      const firstTicketDate = allTickets.length > 0
         ? new Date(Math.min(...allTickets.map(t => new Date(t.created_at).getTime())))
         : now;
       const daysSinceFirst = Math.max(1, Math.ceil((now.getTime() - firstTicketDate.getTime()) / (1000 * 60 * 60 * 24)));
@@ -149,11 +149,11 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
       // setOpenTicketsCount(activeTickets.length);
 
       // Count open tickets excluding Return Issues
-      const nonAutoTickets = activeTickets.filter(t => 
+      const nonAutoTickets = activeTickets.filter(t =>
         t.ticket_source !== 'auto'
       );
       setOpenTicketsCount(nonAutoTickets.length);
-      
+
     } catch (error) {
       console.error('Error fetching reseller stats:', error);
       setResellerStats(null);
@@ -181,10 +181,10 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
         .select('*, agent_profiles!assigned_agent_id(full_name)')
         .eq('id', ticketId)
         .single();
-      
+
       if (error) throw error;
       setTicket(data);
-      
+
       if (data) {
         fetchResellerStats(data.reseller_id);
       }
@@ -197,7 +197,7 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
 
   const handleFlagReseller = async (status: 'blocked' | 'restricted' | 'genuine') => {
     if (!ticket) return;
-    
+
     setUpdating(true);
     try {
       let newQuota: number;
@@ -229,16 +229,16 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
         });
 
       if (error) throw error;
-      
+
       setResellerStatus(status);
       setTicketQuota(newQuota);
-      
+
       const statusLabels = {
         blocked: 'Blocked',
         restricted: 'Restricted',
         genuine: 'Genuine'
       };
-      
+
       toast.success(`Reseller marked as ${statusLabels[status]} (quota: ${newQuota})`);
     } catch (error) {
       console.error('Error flagging reseller:', error);
@@ -250,7 +250,7 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
 
   const handleAllowMoreTickets = async () => {
     if (!ticket) return;
-    
+
     setUpdating(true);
     try {
       let newQuota: number;
@@ -267,17 +267,17 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
 
       const { error } = await supabase
         .from('reseller_profiles')
-        .update({ 
+        .update({
           ticket_quota: newQuota,
           reseller_status: newStatus
         })
         .eq('reseller_id', ticket.reseller_id);
 
       if (error) throw error;
-      
+
       setTicketQuota(newQuota);
       setResellerStatus(newStatus);
-      
+
       toast.success(`Quota increased to ${newQuota} tickets`);
     } catch (error) {
       console.error('Error increasing quota:', error);
@@ -303,7 +303,7 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
         .eq('id', ticketId);
 
       if (error) throw error;
-      
+
       await refreshTickets();
 
       // Create activity record
@@ -315,7 +315,7 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
       } else {
         activityDetails = `${profile?.full_name} changed status to ${newStatus}`;
       }
-      
+
       await supabase.from('ticket_activities').insert({
         ticket_id: ticketId,
         activity_type: 'status_changed',
@@ -324,7 +324,7 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
       });
 
       toast.success(`Status updated to ${newStatus}`);
-      
+
       if (newStatus === 'Resolved') {
         setTimeout(() => {
           onNextTicket?.();
@@ -345,7 +345,11 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
     try {
       const { error } = await supabase
         .from('tickets')
-        .update({ assigned_agent_id: agentId === 'unassigned' ? null : agentId })
+        .update({
+          assigned_agent_id: agentId === 'unassigned' ? null : agentId,
+          // If assigning to a human agent, remove from AI handling
+          ai_handled: agentId === 'unassigned' ? undefined : false,
+        })
         .eq('id', ticketId);
 
       if (error) throw error;
@@ -404,7 +408,7 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
         <h4 className="text-xs font-semibold text-gray-600 mb-3 uppercase tracking-wide">
           Contact & Ticket Info
         </h4>
-        
+
         <div className="space-y-2.5">
           {/* Reseller Name */}
           <div>
@@ -431,13 +435,12 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
           {/* Reseller Status Badge */}
           <div>
             <p className="text-xs text-gray-500 mb-0.5">Status</p>
-            <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold ${
-              resellerStatus === 'blocked' 
-                ? 'bg-red-600 text-white' 
-                : resellerStatus === 'restricted' 
-                ? 'bg-yellow-600 text-white' 
+            <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold ${resellerStatus === 'blocked'
+              ? 'bg-red-600 text-white'
+              : resellerStatus === 'restricted'
+                ? 'bg-yellow-600 text-white'
                 : 'bg-green-600 text-white'
-            }`}>
+              }`}>
               {resellerStatus === 'blocked' && '🚫 Blocked'}
               {resellerStatus === 'restricted' && '⚠️ Restricted'}
               {resellerStatus === 'genuine' && '✅ Genuine'}
@@ -631,7 +634,7 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
                   {resellerStats.activeTickets.total}
                 </span>
               </div>
-              
+
               {Object.keys(resellerStats.activeTickets.byType).length > 0 ? (
                 <div className="space-y-1 mt-2">
                   {Object.entries(resellerStats.activeTickets.byType).map(([type, count]) => (
@@ -649,7 +652,7 @@ const InfoPanel = ({ ticketId, onNextTicket, onClose }: InfoPanelProps) => {
 
             {/* Resolved Tickets */}
             <div className="border border-green-300 rounded-lg p-3 bg-green-200">
-              <div 
+              <div
                 className="flex items-center justify-between cursor-pointer"
                 onClick={() => setShowResolvedBreakdown(!showResolvedBreakdown)}
               >

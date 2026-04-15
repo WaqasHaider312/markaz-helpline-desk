@@ -561,7 +561,8 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo, onSelectTicket }: ChatPan
           latest_message: replyText.trim() || 'Attachment',
           latest_message_at: new Date().toISOString(),
           latest_message_sender: 'agent',
-          unread_by_agent: false
+          unread_by_agent: false,
+          ai_handled: false,
         })
         .eq('id', ticketId);
 
