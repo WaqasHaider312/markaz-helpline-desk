@@ -3,7 +3,14 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = 'https://fswpxkikvrkvsvwifvga.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZzd3B4a2lrdnJrdnN2d2lmdmdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE3NTMxMzQsImV4cCI6MjA3NzMyOTEzNH0.Pg5ZqydLxlbKOvTtaqsbcGOlk8JRE2RgsO1aSooGdUU';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Every agent's client subscribes to ticket-wide changes, and bulk assign/resolve
+// plus the AI responder can burst well past the default 10 events/sec — anything
+// over the limit is dropped silently and the list goes stale until a manual refresh.
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  realtime: {
+    params: { eventsPerSecond: 50 },
+  },
+});
 
 // Database Types
 export interface Ticket {

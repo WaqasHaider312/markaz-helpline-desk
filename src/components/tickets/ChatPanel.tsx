@@ -112,26 +112,43 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo, onSelectTicket }: ChatPan
     activeCount: number;
   } | null>(null);
 
+  // Which ticket we've already fetched individually, to avoid refetching it on
+  // every change to the shared ticket list.
+  const singleFetchedIdRef = useRef<string | null>(null);
+
+  // Keep the open ticket's header/details in sync with the shared list.
   useEffect(() => {
-    if (ticketId) {
-      const currentTicket = tickets.find(t => t.id === ticketId);
+    if (!ticketId) return;
 
-      if (currentTicket) {
-        setTicket(currentTicket);
-      } else {
-        // Ticket not in loaded tickets, fetch from database
-        fetchSingleTicket(ticketId);
-      }
+    const currentTicket = tickets.find(t => t.id === ticketId);
 
-      fetchTicketData();
-      fetchCannedMessages();
-      const unsubscribe = subscribeToUpdates();
+    if (currentTicket) {
+      setTicket(currentTicket);
+      return;
+    }
 
-      return () => {
-        unsubscribe();
-      };
+    // Not in the shared list (e.g. an older resolved ticket opened from search).
+    // Fetch it once instead of on every change to the list.
+    if (singleFetchedIdRef.current !== ticketId) {
+      singleFetchedIdRef.current = ticketId;
+      fetchSingleTicket(ticketId);
     }
   }, [ticketId, tickets]);
+
+  // Messages, canned replies and the realtime channel depend only on which ticket
+  // is open. Keying these on `tickets` too meant the channel was torn down and
+  // rebuilt on every change to the shared list, which can drop incoming messages.
+  useEffect(() => {
+    if (!ticketId) return;
+
+    fetchTicketData();
+    fetchCannedMessages();
+    const unsubscribe = subscribeToUpdates();
+
+    return () => {
+      unsubscribe();
+    };
+  }, [ticketId]);
 
   useEffect(() => {
     scrollToBottom();
@@ -302,10 +319,12 @@ const ChatPanel = ({ ticketId, onToggleInfo, showInfo, onSelectTicket }: ChatPan
     }
 
     const channel = supabase
-      .channel(`ticket-${ticketId}`)
+      .channel(`ticket-${ticketId}-${Date.now()}`)
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'tickets' },
+        // Scoped to the open ticket: unfiltered, this mirrored every ticket UPDATE
+        // in the system into every agent's browser just to discard it here.
+        { event: 'UPDATE', schema: 'public', table: 'tickets', filter: `id=eq.${ticketId}` },
         (payload) => {
           setTicket(prev => prev?.id === payload.new.id
             ? { ...prev, ...payload.new }
