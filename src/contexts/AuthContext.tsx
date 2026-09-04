@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, AgentProfile } from '@/lib/supabase';
 import { useNavigate } from 'react-router-dom';
@@ -19,6 +19,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<AgentProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  // Tracks which agent's profile is already loaded. onAuthStateChange also fires on
+  // TOKEN_REFRESHED (hourly) and on tab refocus; refetching there would hand every
+  // consumer a brand new profile object and needlessly tear down the realtime channel.
+  const loadedProfileIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     // Set up auth state listener
@@ -27,10 +31,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(session?.user ?? null);
       
       if (session?.user) {
+        if (loadedProfileIdRef.current === session.user.id) {
+          setLoading(false);
+          return;
+        }
         setTimeout(() => {
           fetchProfile(session.user.id);
         }, 0);
       } else {
+        loadedProfileIdRef.current = null;
         setProfile(null);
       }
     });
@@ -41,6 +50,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(session?.user ?? null);
       
       if (session?.user) {
+        if (loadedProfileIdRef.current === session.user.id) {
+          setLoading(false);
+          return;
+        }
         fetchProfile(session.user.id);
       } else {
         setLoading(false);
@@ -59,6 +72,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
 
       if (error) throw error;
+      loadedProfileIdRef.current = data?.id ?? null;
       setProfile(data);
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -83,6 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    loadedProfileIdRef.current = null;
     setUser(null);
     setSession(null);
     setProfile(null);

@@ -27,13 +27,17 @@ interface TicketListProps {
 
 type SortType = 'newest' | 'oldest' | 'longest-wait' | 'unread';
 
+const PAGE_SIZE = 20;
+// Rounds of scroll-triggered auto-loading before the agent has to click "Load More".
+const MAX_AUTO_LOADS = 10;
+
 const getInitials = (name: string) => {
   return name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'UN';
 };
 
 const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpen, onTicketsLoad }: TicketListProps) => {
   const { profile } = useAuth();
-  const { tickets: allTickets } = useTickets();
+  const { tickets: allTickets, realtimeStatus } = useTickets();
   const [displayedTickets, setDisplayedTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -45,11 +49,14 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
   const [agents, setAgents] = useState<any[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string>('');
   const [assigning, setAssigning] = useState(false);
-  const [displayCount, setDisplayCount] = useState(20);
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   const [autoLoadCount, setAutoLoadCount] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [searchResults, setSearchResults] = useState<Ticket[]>([]);
+  // The query that searchResults actually correspond to, so we can tell "no matches"
+  // apart from "the debounced request hasn't come back yet".
+  const [searchedQuery, setSearchedQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
 
@@ -60,41 +67,43 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
   const filteredTickets = useMemo(() => {
     if (!profile) return [];
 
-    // Use search results if searching
-    if (searchQuery.trim()) {
-      return searchResults;
+    const trimmedQuery = searchQuery.trim();
+
+    if (trimmedQuery) {
+      // Server-side results are authoritative once they land for this exact query.
+      if (searchedQuery === trimmedQuery) return searchResults;
+
+      // Otherwise the 500ms debounce is still pending (or the request failed) —
+      // filter what's already loaded rather than showing an empty list.
+      const q = trimmedQuery.toLowerCase();
+      return allTickets.filter(t =>
+        t.ticket_number?.toLowerCase().includes(q) ||
+        t.reseller_phone?.toLowerCase().includes(q) ||
+        t.order_id?.toLowerCase().includes(q) ||
+        t.reseller_name?.toLowerCase().includes(q)
+      );
     }
 
     let filtered = [...allTickets];
-    // ... rest of existing code stays the same
 
-    if (searchQuery) {
-      filtered = filtered.filter(t =>
-        t.ticket_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.reseller_phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.order_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.reseller_name?.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    } else {
-      if (currentView === 'my-open') {
-        filtered = filtered.filter(t => t.assigned_agent_id === profile.id && t.status !== 'Resolved');
-      } else if (currentView === 'all-assigned') {
-        filtered = filtered.filter(t => t.status !== 'Resolved' && t.assigned_agent_id !== null);
-      } else if (currentView === 'unassigned') {
-        // Unassigned: not assigned, not resolved, NOT currently AI handled
-        filtered = filtered.filter(t => t.assigned_agent_id === null && t.status !== 'Resolved' && !(t as any).ai_handled);
-      } else if (currentView === 'ai-handling') {
-        // AI Handling: actively handled by AI, not resolved
-        filtered = filtered.filter(t => (t as any).ai_handled === true && t.status !== 'Resolved');
-      } else if (currentView === 'my-resolved-today') {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        filtered = filtered.filter(t => (t as any).resolved_by === profile.id && t.status === 'Resolved' && new Date(t.updated_at) >= today);
-      } else if (currentView === 'all-resolved-today') {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        filtered = filtered.filter(t => t.status === 'Resolved' && new Date(t.updated_at) >= today);
-      }
+    if (currentView === 'my-open') {
+      filtered = filtered.filter(t => t.assigned_agent_id === profile.id && t.status !== 'Resolved');
+    } else if (currentView === 'all-assigned') {
+      filtered = filtered.filter(t => t.status !== 'Resolved' && t.assigned_agent_id !== null);
+    } else if (currentView === 'unassigned') {
+      // Unassigned: not assigned, not resolved, NOT currently AI handled
+      filtered = filtered.filter(t => t.assigned_agent_id === null && t.status !== 'Resolved' && !(t as any).ai_handled);
+    } else if (currentView === 'ai-handling') {
+      // AI Handling: actively handled by AI, not resolved
+      filtered = filtered.filter(t => (t as any).ai_handled === true && t.status !== 'Resolved');
+    } else if (currentView === 'my-resolved-today') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      filtered = filtered.filter(t => (t as any).resolved_by === profile.id && t.status === 'Resolved' && new Date(t.updated_at) >= today);
+    } else if (currentView === 'all-resolved-today') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      filtered = filtered.filter(t => t.status === 'Resolved' && new Date(t.updated_at) >= today);
     }
 
     if (topicFilter !== 'All Topics') {
@@ -109,7 +118,10 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
 
     const sortGroup = (tickets: Ticket[]) => {
       if (sortBy === 'unread') {
-        return tickets.filter(t => t.unread_by_agent).sort((a, b) =>
+        // Unread first, then most recent activity. This is a sort, not a filter —
+        // it must never remove tickets from the agent's list.
+        return tickets.sort((a, b) =>
+          Number(!!b.unread_by_agent) - Number(!!a.unread_by_agent) ||
           new Date(b.latest_message_at || b.created_at).getTime() - new Date(a.latest_message_at || a.created_at).getTime()
         );
       } else if (sortBy === 'newest') {
@@ -121,17 +133,27 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
     };
 
     return [...sortGroup(needsReply), ...sortGroup(alreadyReplied)];
-  }, [allTickets, currentView, profile, topicFilter, statusFilter, searchQuery, sortBy, searchResults]);
+  }, [allTickets, currentView, profile, topicFilter, statusFilter, searchQuery, sortBy, searchResults, searchedQuery]);
 
   useEffect(() => {
-    setDisplayedTickets(filteredTickets.slice(0, displayCount));
+    const visible = filteredTickets.slice(0, displayCount);
+
+    // Replying to a ticket moves it from the "needs reply" group to the
+    // "already replied" one, which can push it past the visible cut. Keep the
+    // open ticket in the list so it never disappears mid-conversation.
+    if (selectedTicketId && !visible.some(t => t.id === selectedTicketId)) {
+      const selected = filteredTickets.find(t => t.id === selectedTicketId);
+      if (selected) visible.push(selected);
+    }
+
+    setDisplayedTickets(visible);
     onTicketsLoad?.(filteredTickets);
     setLoading(false);
-  }, [filteredTickets, displayCount]);
+  }, [filteredTickets, displayCount, selectedTicketId]);
 
   // Reset display count when view/filters change
   useEffect(() => {
-    setDisplayCount(20);
+    setDisplayCount(PAGE_SIZE);
     setAutoLoadCount(0);
   }, [currentView, topicFilter, statusFilter, searchQuery, sortBy]);
 
@@ -144,8 +166,8 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
       const { scrollTop, scrollHeight, clientHeight } = container;
       const bottomReached = scrollHeight - scrollTop - clientHeight < 100;
 
-      if (bottomReached && displayCount < filteredTickets.length && autoLoadCount < 2) {
-        setDisplayCount(prev => prev + 20);
+      if (bottomReached && displayCount < filteredTickets.length && autoLoadCount < MAX_AUTO_LOADS) {
+        setDisplayCount(prev => prev + PAGE_SIZE);
         setAutoLoadCount(prev => prev + 1);
       }
     };
@@ -179,6 +201,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
   const searchDatabase = async (query: string) => {
     if (!query.trim()) {
       setSearchResults([]);
+      setSearchedQuery('');
       setIsSearching(false);
       return;
     }
@@ -194,9 +217,13 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
 
       if (error) throw error;
       setSearchResults(data || []);
+      setSearchedQuery(query.trim());
     } catch (error) {
       console.error('Error searching:', error);
       setSearchResults([]);
+      // Leave searchedQuery unset so the list falls back to local filtering
+      // instead of claiming there are no matches.
+      setSearchedQuery('');
     } finally {
       setIsSearching(false);
     }
@@ -219,46 +246,48 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
 
     setAssigning(true);
     try {
-      const updates = Array.from(selectedTickets).map(ticketId => ({
-        id: ticketId,
-        assigned_agent_id: selectedAgent,
-        updated_at: new Date().toISOString()
-      }));
+      // Batched rather than looped: a 50-ticket assign used to fire ~100 sequential
+      // writes, which blows past the realtime rate limit for every other agent
+      // watching and leaves their lists stale.
+      const ticketIds = Array.from(selectedTickets);
+      const nextAgentId = selectedAgent === 'unassign' ? null : selectedAgent;
 
-      for (const update of updates) {
-        const { error } = await supabase
-          .from('tickets')
-          .update({
-            assigned_agent_id: selectedAgent === 'unassign' ? null : selectedAgent,
-            updated_at: update.updated_at
-          })
-          .eq('id', update.id);
+      const { error } = await supabase
+        .from('tickets')
+        .update({
+          assigned_agent_id: nextAgentId,
+          updated_at: new Date().toISOString()
+        })
+        .in('id', ticketIds);
 
-        if (error) throw error;
+      if (error) throw error;
 
-        const assignedTo = selectedAgent === 'unassign' ? null : agents.find(a => a.id === selectedAgent)?.full_name;
-        let activityDetails = '';
+      const assignedTo = agents.find(a => a.id === selectedAgent)?.full_name;
+      let activityDetails = '';
 
-        if (selectedAgent === 'unassign') {
-          activityDetails = `${profile?.full_name} unassigned the ticket`;
-        } else if (selectedAgent === profile?.id) {
-          activityDetails = `${profile?.full_name} assigned ticket to self`;
-        } else {
-          activityDetails = `${profile?.full_name} assigned ticket to ${assignedTo}`;
-        }
+      if (selectedAgent === 'unassign') {
+        activityDetails = `${profile?.full_name} unassigned the ticket`;
+      } else if (selectedAgent === profile?.id) {
+        activityDetails = `${profile?.full_name} assigned ticket to self`;
+      } else {
+        activityDetails = `${profile?.full_name} assigned ticket to ${assignedTo}`;
+      }
 
-        await supabase.from('ticket_activities').insert({
-          ticket_id: update.id,
+      const { error: activityError } = await supabase.from('ticket_activities').insert(
+        ticketIds.map(ticketId => ({
+          ticket_id: ticketId,
           activity_type: 'assigned',
           actor_name: profile?.full_name || 'Agent',
           details: activityDetails
-        });
-      }
+        }))
+      );
+
+      if (activityError) console.error('Error logging assign activity:', activityError);
 
       setSelectedTickets(new Set());
       setSelectedAgent('');
       await refreshTickets();
-      toast.success(`${updates.length} tickets assigned`);
+      toast.success(`${ticketIds.length} tickets assigned`);
     } catch (error) {
       console.error('Error assigning tickets:', error);
       toast.error('Failed to assign tickets');
@@ -272,29 +301,33 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
 
     setAssigning(true);
     try {
-      for (const ticketId of Array.from(selectedTickets)) {
-        const { error } = await supabase
-          .from('tickets')
-          .update({
-            status: 'Resolved',
-            resolved_by: profile?.id,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', ticketId);
+      const ticketIds = Array.from(selectedTickets);
 
-        if (error) throw error;
+      const { error } = await supabase
+        .from('tickets')
+        .update({
+          status: 'Resolved',
+          resolved_by: profile?.id,
+          updated_at: new Date().toISOString()
+        })
+        .in('id', ticketIds);
 
-        await supabase.from('ticket_activities').insert({
+      if (error) throw error;
+
+      const { error: activityError } = await supabase.from('ticket_activities').insert(
+        ticketIds.map(ticketId => ({
           ticket_id: ticketId,
           activity_type: 'status_changed',
           actor_name: profile?.full_name || 'Agent',
           details: `${profile?.full_name} marked ticket as Resolved`
-        });
-      }
+        }))
+      );
+
+      if (activityError) console.error('Error logging resolve activity:', activityError);
 
       setSelectedTickets(new Set());
       await refreshTickets();
-      toast.success(`${selectedTickets.size} tickets resolved`);
+      toast.success(`${ticketIds.length} tickets resolved`);
     } catch (error) {
       console.error('Error resolving tickets:', error);
       toast.error('Failed to resolve tickets');
@@ -304,7 +337,7 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
   };
 
   const handleLoadMore = () => {
-    setDisplayCount(prev => prev + 20);
+    setDisplayCount(prev => prev + PAGE_SIZE);
   };
 
   const getStatusColor = (status: string) => {
@@ -513,6 +546,9 @@ const TicketList = ({ currentView, selectedTicketId, onSelectTicket, onTicketOpe
         <div className="flex justify-between items-center mt-2">
           <p className="text-xs text-muted-foreground">
             Sorted by: {getSortLabel(sortBy)}
+            {realtimeStatus === 'reconnecting' && (
+              <span className="ml-2 text-amber-600">• Reconnecting…</span>
+            )}
           </p>
           <p className="text-xs text-muted-foreground">
             Showing {displayedTickets.length} of {filteredTickets.length}
