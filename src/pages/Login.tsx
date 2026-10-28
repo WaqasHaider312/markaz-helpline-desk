@@ -34,13 +34,18 @@ const Login = () => {
       const { error } = await signIn(email, password);
 
       if (error) {
-        toast.error(error.message || 'Failed to sign in');
+        const msg = error.message || '';
+        if (msg.includes('timeout') || msg.includes('deadline') || msg.includes('connect')) {
+          toast.error('Connection timed out — Supabase may be slow. Please try again.');
+        } else {
+          toast.error(msg || 'Failed to sign in');
+        }
       } else {
         toast.success('Welcome back!');
         navigate('/tickets');
       }
     } catch (error) {
-      toast.error('An unexpected error occurred');
+      toast.error('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }
