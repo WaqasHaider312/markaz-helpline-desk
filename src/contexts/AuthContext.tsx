@@ -28,7 +28,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Safety net: if auth hangs (e.g. Supabase token refresh timeout), unblock the UI
     const safetyTimeout = setTimeout(() => setLoading(false), 8000);
 
-    // onAuthStateChange fires INITIAL_SESSION on mount — use it as the single source of truth
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -38,10 +37,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setLoading(false);
           return;
         }
-        fetchProfile(session.user.id); // sets loading(false) in its finally
+        // setTimeout avoids calling Supabase inside the auth callback synchronously
+        setTimeout(() => fetchProfile(session.user.id), 0);
       } else {
         loadedProfileIdRef.current = null;
         setProfile(null);
+        setLoading(false); // fix: was missing, causing stuck loading when getSession hangs
+      }
+    });
+
+    // Fallback: ensures initial session is resolved even if onAuthStateChange is slow
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+
+      if (session?.user) {
+        if (loadedProfileIdRef.current === session.user.id) {
+          setLoading(false);
+          return;
+        }
+        fetchProfile(session.user.id);
+      } else {
         setLoading(false);
       }
     });
